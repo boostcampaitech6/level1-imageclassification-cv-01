@@ -35,6 +35,31 @@ def load_model(saved_model, num_classes, device):
 
     return model
 
+def load_model_mul(saved_model, num_classes, device):
+    """
+    저장된 모델의 가중치를 로드하는 함수입니다.
+
+    Args:
+        saved_model (str): 모델 가중치가 저장된 디렉토리 경로
+        num_classes (int): 모델의 클래수 수
+        device (torch.device): 모델이 로드될 장치 (CPU 또는 CUDA)
+
+    Returns:
+        model (nn.Module): 가중치가 로드된 모델
+    """
+    model_cls = getattr(import_module("model"), args.model)
+    model = model_cls()
+
+    # tarpath = os.path.join(saved_model, 'best.tar.gz')
+    # tar = tarfile.open(tarpath, 'r:gz')
+    # tar.extractall(path=saved_model)
+
+    # 모델 가중치를 로드한다.
+    model_path = os.path.join(saved_model, "best.pth")
+    model.load_state_dict(torch.load(model_path, map_location=device))
+
+    return model
+
 
 @torch.no_grad()
 def inference(data_dir, model_dir, output_dir, args):
@@ -119,12 +144,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data_dir",
         type=str,
-        default=os.environ.get("SM_CHANNEL_EVAL", "/opt/ml/input/data/eval"),
+        default=os.environ.get("SM_CHANNEL_EVAL", "./eval"),
     )
     parser.add_argument(
         "--model_dir",
         type=str,
-        default=os.environ.get("SM_CHANNEL_MODEL", "./model/exp"),
+        default=os.environ.get("SM_CHANNEL_MODEL", "./model/exp7"),
     )
     parser.add_argument(
         "--output_dir",

@@ -263,7 +263,7 @@ class MaskBaseDataset(Dataset):
         multi_class_label = self.encode_multi_class(mask_label, gender_label, age_label)
 
         image_transform = self.transform(image)
-        return image_transform, multi_class_label
+        return image_transform, age_label,mask_label,gender_label
 
     def __len__(self):
         """데이터셋의 길이를 반환하는 메서드"""

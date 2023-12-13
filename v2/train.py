@@ -11,6 +11,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -140,19 +142,49 @@ def train(data_dir, model_dir, args):
     )
 
     # -- model
-    model_module = getattr(import_module("model"), args.model)  # default: BaseModel
-    model = model_module(num_classes=num_classes).to(device)
-    model = torch.nn.DataParallel(model)
+    #model_module = getattr(import_module("model"), args.model)  # default: BaseModel
+    # model = model_module(num_classes=num_classes).to(device)
+
+    model_age = torch.hub.load('NVIDIA/DeepLearningExamples:torchhub', 'nvidia_resneXt')#'pytorch/vision:v0.10.0', 'resnext101_32x4d', pretrained=True)
+    model_mask = torch.hub.load('NVIDIA/DeepLearningExamples:torchhub', 'nvidia_resneXt')
+    model_gender = torch.hub.load('NVIDIA/DeepLearningExamples:torchhub', 'nvidia_resneXt')
+    # freezing
+    for param in model_age.parameters():
+        param.requires_grad = False
+    for param in model_mask.parameters():
+        param.requires_grad = False
+    for param in model_gender.parameters():
+        param.requires_grad = False
+    # fc layer 수정
+    fc_in_features = model_age.fc.in_features
+    model_age.fc = nn.Linear(fc_in_features, 3)
+    model_mask.fc = nn.Linear(fc_in_features, 3)
+    model_gender.fc = nn.Linear(fc_in_features, 2)
+    model_age = model_age.to(device)
+    model_mask = model_mask.to(device)
+    model_gender = model_gender.to(device)
 
     # -- loss & metric
     criterion = create_criterion(args.criterion)  # default: cross_entropy
     opt_module = getattr(import_module("torch.optim"), args.optimizer)  # default: SGD
-    optimizer = opt_module(
-        filter(lambda p: p.requires_grad, model.parameters()),
+    optimizer_age = opt_module(
+        filter(lambda p: p.requires_grad, model_age.parameters()),
         lr=args.lr,
         weight_decay=5e-4,
     )
-    scheduler = StepLR(optimizer, args.lr_decay_step, gamma=0.5)
+    optimizer_mask = opt_module(
+        filter(lambda p: p.requires_grad, model_mask.parameters()),
+        lr=args.lr,
+        weight_decay=5e-4,
+    )
+    optimizer_gender = opt_module(
+        filter(lambda p: p.requires_grad, model_gender.parameters()),
+        lr=args.lr,
+        weight_decay=5e-4,
+    )
+    scheduler_age = StepLR(optimizer_age, args.lr_decay_step, gamma=0.5)
+    scheduler_mask = StepLR(optimizer_mask, args.lr_decay_step, gamma=0.5)   
+    scheduler_gender = StepLR(optimizer_gender, args.lr_decay_step, gamma=0.5)
 
     # -- logging
     logger = SummaryWriter(log_dir=save_dir)
@@ -163,29 +195,55 @@ def train(data_dir, model_dir, args):
     best_val_loss = np.inf
     for epoch in range(args.epochs):
         # train loop
-        model.train()
+        model_age.train()
+        model_mask.train()
+        model_gender.train()
         loss_value = 0
         matches = 0
         for idx, train_batch in enumerate(train_loader):
-            inputs, labels = train_batch
+            inputs, age_label,mask_label,gender_label = train_batch
+            
             inputs = inputs.to(device)
-            labels = labels.to(device)
+            age_label,mask_label,gender_label = torch.tensor(age_label).to(device),torch.tensor(mask_label).to(device),torch.tensor(gender_label).to(device)
+            
+            ###age###
+            optimizer_age.zero_grad()
 
-            optimizer.zero_grad()
+            logits = model_age(inputs)
+            preds_age = torch.argmax(logits, dim=-1)
+            loss_age = criterion(logits, age_label)
 
-            outs = model(inputs)
-            preds = torch.argmax(outs, dim=-1)
-            loss = criterion(outs, labels)
+            loss_age.backward()
+            optimizer_age.step()
+            
+            ###mask###
+            optimizer_mask.zero_grad()
 
-            loss.backward()
-            optimizer.step()
+            logits = model_mask(inputs)
+            preds_mask = torch.argmax(logits, dim=-1)
+            loss_mask = criterion(logits, mask_label)
 
-            loss_value += loss.item()
-            matches += (preds == labels).sum().item()
+            loss_mask.backward()
+            optimizer_mask.step()
+            
+            ###gender###
+            optimizer_gender.zero_grad()
+
+            logits = model_gender(inputs)
+            preds_gender = torch.argmax(logits, dim=-1)
+            loss_gender = criterion(logits, gender_label)
+
+            loss_gender.backward()
+            optimizer_gender.step()
+            
+
+            loss_value += (loss_age.item()+loss_mask.item()+loss_gender.item())/3
+            correct_predictions = (preds_age == age_label) & (preds_mask == mask_label) & (preds_gender == gender_label)
+            matches += correct_predictions.sum().item()
             if (idx + 1) % args.log_interval == 0:
                 train_loss = loss_value / args.log_interval
                 train_acc = matches / args.batch_size / args.log_interval
-                current_lr = get_lr(optimizer)
+                current_lr = get_lr(optimizer_age)
                 print(
                     f"Epoch[{epoch}/{args.epochs}]({idx + 1}/{len(train_loader)}) || "
                     f"training loss {train_loss:4.4} || training accuracy {train_acc:4.2%} || lr {current_lr}"
@@ -200,26 +258,31 @@ def train(data_dir, model_dir, args):
                 loss_value = 0
                 matches = 0
 
-        scheduler.step()
+        scheduler_age.step()
+        scheduler_mask.step()
+        scheduler_gender.step()
 
         # val loop
         with torch.no_grad():
             print("Calculating validation results...")
-            model.eval()
+            model_age.eval()
+            model_mask.eval()
+            model_gender.eval()
             val_loss_items = []
             val_acc_items = []
             figure = None
             for val_batch in val_loader:
-                inputs, labels = val_batch
+                inputs, age_label,mask_label,gender_label = val_batch
                 inputs = inputs.to(device)
-                labels = labels.to(device)
+                age_label,mask_label,gender_label = torch.tensor(age_label).to(device),torch.tensor(mask_label).to(device),torch.tensor(gender_label).to(device)
 
-                outs = model(inputs)
-                preds = torch.argmax(outs, dim=-1)
+                logits_age, logits_mask, logits_gender = model_age(inputs),model_mask(inputs),model_gender(inputs)
+                preds_age,preds_mask,preds_gender = torch.argmax(logits_age, dim=-1),torch.argmax(logits_mask, dim=-1),torch.argmax(logits_gender, dim=-1)
 
-                loss_item = criterion(outs, labels).item()
-                acc_item = (labels == preds).sum().item()
-                val_loss_items.append(loss_item)
+                loss_item_age, loss_item_mask, loss_item_gender = criterion(logits_age, age_label).item(),criterion(logits_mask, mask_label).item(),criterion(logits_gender, gender_label).item()
+                acc=(age_label==preds_age) & (mask_label==preds_mask) & (gender_label==preds_gender)
+                acc_item = acc.sum().item()
+                val_loss_items.append((loss_item_age+loss_item_mask+loss_item_gender)/3)
                 val_acc_items.append(acc_item)
 
                 if figure is None:
@@ -231,8 +294,8 @@ def train(data_dir, model_dir, args):
                     )
                     figure = grid_image(
                         inputs_np,
-                        labels,
-                        preds,
+                        age_label,
+                        preds_age,
                         n=16,
                         shuffle=args.dataset != "MaskSplitByProfileDataset",
                     )
@@ -244,9 +307,17 @@ def train(data_dir, model_dir, args):
                 print(
                     f"New best model for val accuracy : {val_acc:4.2%}! saving the best model.."
                 )
-                torch.save(model.module.state_dict(), f"{save_dir}/best.pth")
+                torch.save({
+                    'model_age': model_age.state_dict(),  
+                    'model_mask': model_mask.state_dict(),
+                    'model_gender': model_gender.state_dict(),
+                    }, f"{save_dir}/best.pth")
                 best_val_acc = val_acc
-            torch.save(model.module.state_dict(), f"{save_dir}/last.pth")
+            torch.save({
+                    'model_age': model_age.state_dict(),  
+                    'model_mask': model_mask.state_dict(),
+                    'model_gender': model_gender.state_dict(),
+                    }, f"{save_dir}/last.pth")
             print(
                 f"[Val] acc : {val_acc:4.2%}, loss: {val_loss:4.2} || "
                 f"best acc : {best_val_acc:4.2%}, best loss: {best_val_loss:4.2}"
@@ -265,7 +336,7 @@ if __name__ == "__main__":
         "--seed", type=int, default=42, help="random seed (default: 42)"
     )
     parser.add_argument(
-        "--epochs", type=int, default=1, help="number of epochs to train (default: 1)"
+        "--epochs", type=int, default=10, help="number of epochs to train (default: 1)"
     )
     parser.add_argument(
         "--dataset",
@@ -299,10 +370,10 @@ if __name__ == "__main__":
         help="input batch size for validing (default: 1000)",
     )
     parser.add_argument(
-        "--model", type=str, default="BaseModel", help="model type (default: BaseModel)"
+        "--model", type=str, default="MyModel", help="model type (default: BaseModel)"
     )
     parser.add_argument(
-        "--optimizer", type=str, default="SGD", help="optimizer type (default: SGD)"
+        "--optimizer", type=str, default="Adam", help="optimizer type (default: SGD)"
     )
     parser.add_argument(
         "--lr", type=float, default=1e-3, help="learning rate (default: 1e-3)"
