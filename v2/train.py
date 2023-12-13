@@ -145,16 +145,22 @@ def train(data_dir, model_dir, args):
     #model_module = getattr(import_module("model"), args.model)  # default: BaseModel
     # model = model_module(num_classes=num_classes).to(device)
 
-    model_age = torch.hub.load('NVIDIA/DeepLearningExamples:torchhub', 'nvidia_resneXt')#'pytorch/vision:v0.10.0', 'resnext101_32x4d', pretrained=True)
-    model_mask = torch.hub.load('NVIDIA/DeepLearningExamples:torchhub', 'nvidia_resneXt')
-    model_gender = torch.hub.load('NVIDIA/DeepLearningExamples:torchhub', 'nvidia_resneXt')
+    #resnext50
+    model_age = torch.hub.load('pytorch/vision:v0.10.0', 'resnext50_32x4d', pretrained=True)
+    model_mask = torch.hub.load('pytorch/vision:v0.10.0', 'resnext50_32x4d', pretrained=True)
+    model_gender = torch.hub.load('pytorch/vision:v0.10.0', 'resnext50_32x4d', pretrained=True)
+
+    # #resnext101
+    # model_age = torch.hub.load('NVIDIA/DeepLearningExamples:torchhub', 'nvidia_resneXt')#'pytorch/vision:v0.10.0', 'resnext101_32x4d', pretrained=True)
+    # model_mask = torch.hub.load('NVIDIA/DeepLearningExamples:torchhub', 'nvidia_resneXt')
+    # model_gender = torch.hub.load('NVIDIA/DeepLearningExamples:torchhub', 'nvidia_resneXt')
     # freezing
-    for param in model_age.parameters():
-        param.requires_grad = False
-    for param in model_mask.parameters():
-        param.requires_grad = False
-    for param in model_gender.parameters():
-        param.requires_grad = False
+    # for param in model_age.parameters():
+    #     param.requires_grad = False
+    # for param in model_mask.parameters():
+    #     param.requires_grad = False
+    # for param in model_gender.parameters():
+    #     param.requires_grad = False
     # fc layer 수정
     fc_in_features = model_age.fc.in_features
     model_age.fc = nn.Linear(fc_in_features, 3)
@@ -376,7 +382,7 @@ if __name__ == "__main__":
         "--optimizer", type=str, default="Adam", help="optimizer type (default: SGD)"
     )
     parser.add_argument(
-        "--lr", type=float, default=1e-3, help="learning rate (default: 1e-3)"
+        "--lr", type=float, default=1e-4, help="learning rate (default: 1e-3)"
     )
     parser.add_argument(
         "--val_ratio",
@@ -410,7 +416,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data_dir",
         type=str,
-        default=os.environ.get("SM_CHANNEL_TRAIN", "/opt/ml/input/data/train/images"),
+        default=os.environ.get("SM_CHANNEL_TRAIN", "../../../train/images"),
     )
     parser.add_argument(
         "--model_dir", type=str, default=os.environ.get("SM_MODEL_DIR", "./model")
