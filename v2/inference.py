@@ -38,7 +38,7 @@ def load_model(saved_model, num_classes, device):
     # best_epoch?.pth로 생성되므로 glob함수를 사용해 best_epoch*.pth 파일을 전부 가져온다
     model_path = os.path.join(saved_model, "best_epoch*.pth")
     best_model_path = glob.glob(model_path)
-    model.load_state_dict(torch.load(best_model_path[0], map_location=device)['model_state_dict'])
+    model.load_state_dict(torch.load(best_model_path[-1], map_location=device)['model_state_dict'])
     ####################
 
     return model
