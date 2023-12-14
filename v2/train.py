@@ -164,6 +164,7 @@ def train(data_dir, model_dir, args):
 
     best_val_acc = 0
     best_val_loss = np.inf
+    best_epoch = 0 
     
     start_epoch = 0
     
@@ -254,6 +255,7 @@ def train(data_dir, model_dir, args):
             val_acc = np.sum(val_acc_items) / len(val_set)
             best_val_loss = min(best_val_loss, val_loss)
             if val_acc > best_val_acc:
+                best_epoch = epoch
                 print(
                     f"New best model for val accuracy : {val_acc:4.2%}! saving the best model.."
                 )
@@ -265,9 +267,12 @@ def train(data_dir, model_dir, args):
                         'loss': val_loss,
                         'accuracy': val_acc,
                     }
-                    , f"{save_dir}/best_epoch{epoch}.pth")
+                    , f"{save_dir}/best.pth")
+                print(epoch, best_epoch)
                 best_val_acc = val_acc
             torch.save(model.module.state_dict(), f"{save_dir}/last.pth")
+
+
             print(
                 f"[Val] acc : {val_acc:4.2%}, loss: {val_loss:4.2} || "
                 f"best acc : {best_val_acc:4.2%}, best loss: {best_val_loss:4.2}"
@@ -277,6 +282,9 @@ def train(data_dir, model_dir, args):
             logger.add_figure("results", figure, epoch)
             print()
 
+    ################## 
+    os.rename(f"{save_dir}/best.pth",f"{save_dir}/best_epoch{best_epoch+1}.pth")
+    ##################
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
