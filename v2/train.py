@@ -322,7 +322,7 @@ def train(data_dir, model_dir, args):
             val_loss_mask = np.sum(val_loss_items_mask) / len(val_loader)
             val_loss_gender = np.sum(val_loss_items_gender) / len(val_loader)
             val_acc = np.sum(val_acc_items) / len(val_set)
-            best_val_loss = min(best_val_loss, (val_loss_age+val+loss_mask+val_loss_gender)/3)
+            best_val_loss = min(best_val_loss, (val_loss_age+val_loss_mask+val_loss_gender)/3)
             if val_acc > best_val_acc:
                 print(
                     f"New best model for val accuracy : {val_acc:4.2%}! saving the best model.."
