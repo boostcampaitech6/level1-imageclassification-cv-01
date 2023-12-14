@@ -11,6 +11,7 @@ from dataset import TestDataset, MaskBaseDataset
 
 ##########
 from datetime import datetime, timezone, timedelta
+import glob
 ##########
 
 def load_model(saved_model, num_classes, device):
@@ -33,8 +34,12 @@ def load_model(saved_model, num_classes, device):
     # tar.extractall(path=saved_model)
 
     # 모델 가중치를 로드한다.
-    model_path = os.path.join(saved_model, "best.pth")
-    model.load_state_dict(torch.load(model_path, map_location=device))
+    ####################
+    # best_epoch?.pth로 생성되므로 glob함수를 사용해 best_epoch*.pth 파일을 전부 가져온다
+    model_path = os.path.join(saved_model, "best_epoch*.pth")
+    best_model_path = glob.glob(model_path)
+    model.load_state_dict(torch.load(best_model_path[0], map_location=device)['model_state_dict'])
+    ####################
 
     return model
 
