@@ -57,6 +57,11 @@ def load_model_mul(saved_model, num_classes, device):
     model_age = torch.hub.load('pytorch/vision:v0.10.0', 'resnext50_32x4d', pretrained=True)
     model_mask = torch.hub.load('pytorch/vision:v0.10.0', 'resnext50_32x4d', pretrained=True)
     model_gender = torch.hub.load('pytorch/vision:v0.10.0', 'resnext50_32x4d', pretrained=True)
+    
+    fc_in_features = model_age.fc.in_features
+    model_age.fc = nn.Linear(fc_in_features, 3)
+    model_mask.fc = nn.Linear(fc_in_features, 3)
+    model_gender.fc = nn.Linear(fc_in_features, 2)
 
     # tarpath = os.path.join(saved_model, 'best.tar.gz')
     # tar = tarfile.open(tarpath, 'r:gz')
@@ -98,9 +103,11 @@ def inference(data_dir, model_dir, output_dir, args):
 
     # 클래스의 개수를 설정한다. (마스크, 성별, 나이의 조합으로 18)
     num_classes = MaskBaseDataset.num_classes  # 18
-    model_age,model_mask,model_gender = load_model_mul(model_dir, num_classes, device).to(device)
+    model_age,model_mask,model_gender = load_model_mul(model_dir, num_classes, device)
+    model_age,model_mask,model_gender = model_age.to(device),model_mask.to(device),model_gender.to(device)
     model_age.eval()
-    model_mask.evel()
+    model_mask.eval()
+    model_gender.eval()
 
     # 이미지 파일 경로와 정보 파일을 읽어온다.
     img_root = os.path.join(data_dir, "images")
@@ -128,7 +135,7 @@ def inference(data_dir, model_dir, output_dir, args):
             pred_age,pred_mask,pred_gender = logits_age.argmax(dim=-1),logits_mask.argmax(dim=-1),logits_gender.argmax(dim=-1)
             
             
-            preds.extend(MaskBaseDataset.encode_multi_class(pred_age,pred_mask,pred_gender).cpu().numpy())
+            preds.extend(MaskBaseDataset.encode_multi_class(pred_mask,pred_gender,pred_age).cpu().numpy())
 
     # 예측 결과를 데이터프레임에 저장하고 csv 파일로 출력한다.
     info["ans"] = preds
