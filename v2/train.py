@@ -204,7 +204,9 @@ def train(data_dir, model_dir, args):
         model_age.train()
         model_mask.train()
         model_gender.train()
-        loss_value = 0
+        loss_val_age = 0
+        loss_val_mask = 0
+        loss_val_gender = 0
         matches = 0
         for idx, train_batch in enumerate(train_loader):
             inputs, age_label,mask_label,gender_label = train_batch
@@ -243,25 +245,31 @@ def train(data_dir, model_dir, args):
             optimizer_gender.step()
             
 
-            loss_value += (loss_age.item()+loss_mask.item()+loss_gender.item())/3
+            loss_val_age += loss_age.item()
+            loss_val_mask += loss_mask.item()
+            loss_val_gender += loss_gender.item()
             correct_predictions = (preds_age == age_label) & (preds_mask == mask_label) & (preds_gender == gender_label)
             matches += correct_predictions.sum().item()
             if (idx + 1) % args.log_interval == 0:
-                train_loss = loss_value / args.log_interval
+                train_loss_age = loss_val_age / args.log_interval
+                train_loss_mask = loss_val_mask / args.log_interval
+                train_loss_gender = loss_val_gender / args.log_interval
                 train_acc = matches / args.batch_size / args.log_interval
                 current_lr = get_lr(optimizer_age)
                 print(
                     f"Epoch[{epoch}/{args.epochs}]({idx + 1}/{len(train_loader)}) || "
-                    f"training loss {train_loss:4.4} || training accuracy {train_acc:4.2%} || lr {current_lr}"
+                    f"training age loss {train_loss_age:4.4} ||training mask loss {train_loss_mask:4.4} || training gender loss {train_loss_gender:4.4} || training accuracy {train_acc:4.2%} || lr {current_lr}"
                 )
                 logger.add_scalar(
-                    "Train/loss", train_loss, epoch * len(train_loader) + idx
+                    "Train/loss", train_loss_age, epoch * len(train_loader) + idx
                 )
                 logger.add_scalar(
                     "Train/accuracy", train_acc, epoch * len(train_loader) + idx
                 )
 
-                loss_value = 0
+                loss_val_age =0
+                loss_val_mask=0
+                loss_val_gender=0
                 matches = 0
 
         scheduler_age.step()
@@ -274,7 +282,9 @@ def train(data_dir, model_dir, args):
             model_age.eval()
             model_mask.eval()
             model_gender.eval()
-            val_loss_items = []
+            val_loss_items_age = []
+            val_loss_items_mask = []
+            val_loss_items_gender = []
             val_acc_items = []
             figure = None
             for val_batch in val_loader:
@@ -288,7 +298,9 @@ def train(data_dir, model_dir, args):
                 loss_item_age, loss_item_mask, loss_item_gender = criterion(logits_age, age_label).item(),criterion(logits_mask, mask_label).item(),criterion(logits_gender, gender_label).item()
                 acc=(age_label==preds_age) & (mask_label==preds_mask) & (gender_label==preds_gender)
                 acc_item = acc.sum().item()
-                val_loss_items.append((loss_item_age+loss_item_mask+loss_item_gender)/3)
+                val_loss_items_age.append(loss_item_age)
+                val_loss_items_mask.append(loss_item_mask)
+                val_loss_items_gender.append(loss_item_gender)
                 val_acc_items.append(acc_item)
 
                 if figure is None:
@@ -306,9 +318,11 @@ def train(data_dir, model_dir, args):
                         shuffle=args.dataset != "MaskSplitByProfileDataset",
                     )
 
-            val_loss = np.sum(val_loss_items) / len(val_loader)
+            val_loss_age = np.sum(val_loss_items_age) / len(val_loader)
+            val_loss_mask = np.sum(val_loss_items_mask) / len(val_loader)
+            val_loss_gender = np.sum(val_loss_items_gender) / len(val_loader)
             val_acc = np.sum(val_acc_items) / len(val_set)
-            best_val_loss = min(best_val_loss, val_loss)
+            best_val_loss = min(best_val_loss, (val_loss_age+val+loss_mask+val_loss_gender)/3)
             if val_acc > best_val_acc:
                 print(
                     f"New best model for val accuracy : {val_acc:4.2%}! saving the best model.."
@@ -325,10 +339,10 @@ def train(data_dir, model_dir, args):
                     'model_gender': model_gender.state_dict(),
                     }, f"{save_dir}/last.pth")
             print(
-                f"[Val] acc : {val_acc:4.2%}, loss: {val_loss:4.2} || "
+                f"[Val] acc : {val_acc:4.2%}, age loss: {val_loss_age:4.2} || val loss: {val_loss_mask:4.2} || gender loss: {val_loss_gender:4.2} "
                 f"best acc : {best_val_acc:4.2%}, best loss: {best_val_loss:4.2}"
             )
-            logger.add_scalar("Val/loss", val_loss, epoch)
+            logger.add_scalar("Val/loss", val_loss_age, epoch)
             logger.add_scalar("Val/accuracy", val_acc, epoch)
             logger.add_figure("results", figure, epoch)
             print()
@@ -347,7 +361,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        default="MaskBaseDataset",
+        default="MaskSplitByProfileDataset",
         help="dataset augmentation type (default: MaskBaseDataset)",
     )
     parser.add_argument(
