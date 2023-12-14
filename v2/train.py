@@ -18,6 +18,8 @@ from torch.utils.tensorboard import SummaryWriter
 from dataset import MaskBaseDataset
 from loss import create_criterion
 
+from accuracy_loss_print import AccuracyLoss
+
 
 def seed_everything(seed):
     torch.manual_seed(seed)
@@ -140,8 +142,15 @@ def train(data_dir, model_dir, args):
     )
 
     # -- model
-    model_module = getattr(import_module("model"), args.model)  # default: BaseModel
-    model = model_module(num_classes=num_classes).to(device)
+    # model_module = getattr(import_module("model"), args.model)  # default: BaseModel
+    # model = model_module(num_classes=num_classes).to(device)
+    # model = torch.nn.DataParallel(model)
+    import torch.nn as nn
+    from torchvision.models import resnet50
+
+    model_finetune = resnet50(True) # pretrained
+    model_finetune.fc = nn.Linear(2048, num_classes, bias=True)
+    model = model_finetune.to(device)
     model = torch.nn.DataParallel(model)
 
     # -- loss & metric
@@ -175,27 +184,46 @@ def train(data_dir, model_dir, args):
 
             outs = model(inputs)
             preds = torch.argmax(outs, dim=-1)
+
             loss = criterion(outs, labels)
 
             loss.backward()
             optimizer.step()
-
+            
             loss_value += loss.item()
             matches += (preds == labels).sum().item()
+            train_accloss = AccuracyLoss(labels, preds, outs, criterion)
             if (idx + 1) % args.log_interval == 0:
                 train_loss = loss_value / args.log_interval
                 train_acc = matches / args.batch_size / args.log_interval
                 current_lr = get_lr(optimizer)
+                train_loss_dict, train_acc_dict = train_accloss.loss_acc(args.log_interval, 1)
+
                 print(
                     f"Epoch[{epoch}/{args.epochs}]({idx + 1}/{len(train_loader)}) || "
-                    f"training loss {train_loss:4.4} || training accuracy {train_acc:4.2%} || lr {current_lr}"
+                    f"training total loss {train_loss:4.4} || training total accuracy {train_acc:4.2%} || lr {current_lr}"
                 )
+                print(
+                    f"training mask loss {train_loss_dict['mask_wear_loss']:4.4}, {train_loss_dict['mask_incorrect_loss']:4.4}, {train_loss_dict['mask_not_wear_loss']:4.4} || training mask accuracy {train_acc_dict['mask_wear_acc']:4.4%}, {train_acc_dict['mask_incorrect_acc']:4.4%}, {train_acc_dict['mask_not_wear_acc']:4.4%}\n"
+                    f"training gender loss {train_loss_dict['male_loss']:4.4}, {train_loss_dict['female_loss']:4.4} || training gender accuracy {train_acc_dict['mask_not_wear_acc']:4.4%}, {train_acc_dict['female_acc'] :4.4%}\n"
+                    f"training age loss {train_loss_dict['age_0_30_loss']:4.4}, {train_loss_dict['age_30_60_loss']:4.4}, {train_loss_dict['age_60_loss']:4.4} || training age accuracy {train_acc_dict['age_0_30_acc']:4.4%}, {train_acc_dict['age_30_60_acc']:4.4%}, {train_acc_dict['age_60_acc']:4.4%}\n"
+                )
+
                 logger.add_scalar(
                     "Train/loss", train_loss, epoch * len(train_loader) + idx
                 )
                 logger.add_scalar(
                     "Train/accuracy", train_acc, epoch * len(train_loader) + idx
                 )
+
+                for key, value in train_loss_dict.items():
+                    logger.add_scalar(
+                        "Train/"+key, value, epoch * len(train_loader) + idx
+                    )
+                for key, value in train_acc_dict.items():
+                    logger.add_scalar(
+                        "Train/"+key, value, epoch * len(train_loader) + idx
+                    )
 
                 loss_value = 0
                 matches = 0
@@ -209,6 +237,26 @@ def train(data_dir, model_dir, args):
             val_loss_items = []
             val_acc_items = []
             figure = None
+            val_loss_dict = {
+                'mask_wear_loss' : 0,
+                'mask_incorrect_loss' : 0,
+                'mask_not_wear_loss' : 0,
+                'male_loss' : 0,
+                'female_loss' : 0,
+                'age_0_30_loss' : 0,
+                'age_30_60_loss' : 0,
+                'age_60_loss' : 0,
+            }
+            val_acc_dict = {
+                'mask_wear_acc' : 0,
+                'mask_incorrect_acc' : 0,
+                'mask_not_wear_acc' : 0,
+                'male_acc' : 0,
+                'female_acc' : 0,
+                'age_0_30_acc' : 0,
+                'age_30_60_acc' : 0,
+                'age_60_acc' : 0,
+            }
             for val_batch in val_loader:
                 inputs, labels = val_batch
                 inputs = inputs.to(device)
@@ -216,11 +264,18 @@ def train(data_dir, model_dir, args):
 
                 outs = model(inputs)
                 preds = torch.argmax(outs, dim=-1)
-
+                
                 loss_item = criterion(outs, labels).item()
                 acc_item = (labels == preds).sum().item()
                 val_loss_items.append(loss_item)
                 val_acc_items.append(acc_item)
+
+                val_accloss = AccuracyLoss(labels, preds, outs, criterion)
+                val_loss_cls, val_acc_cls = val_accloss.loss_acc(len(val_loader), len(val_loader))
+                for key, value in val_loss_cls.items():
+                    val_loss_dict[key] += value
+                for key, value in val_acc_cls.items():
+                    val_acc_dict[key] += value
 
                 if figure is None:
                     inputs_np = (
@@ -251,9 +306,20 @@ def train(data_dir, model_dir, args):
                 f"[Val] acc : {val_acc:4.2%}, loss: {val_loss:4.2} || "
                 f"best acc : {best_val_acc:4.2%}, best loss: {best_val_loss:4.2}"
             )
+            print(
+                f"[Val] mask loss {val_loss_dict['mask_wear_loss']:4.2}, {val_loss_dict['mask_incorrect_loss']:4.2}, {val_loss_dict['mask_not_wear_loss']:4.4} || training mask accuracy {val_acc_dict['mask_wear_acc']:4.2%}, {val_acc_dict['mask_incorrect_acc']:4.2%}, {val_acc_dict['mask_not_wear_acc']:4.2%}\n"
+                f"[Val] gender loss {val_loss_dict['male_loss']:4.2}, {val_loss_dict['female_loss']:4.2} || training gender accuracy {val_acc_dict['mask_not_wear_acc']:4.2%}, {val_acc_dict['female_acc']:4.2%}\n"
+                f"[Val] age loss {val_loss_dict['age_0_30_loss']:4.2}, {val_loss_dict['age_30_60_loss']:4.2}, {val_loss_dict['age_60_loss']:4.2} || training age accuracy {val_acc_dict['age_0_30_acc']:4.2%}, {val_acc_dict['age_30_60_acc']:4.2%}, {val_acc_dict['age_60_acc']:4.2%}\n"
+            )
+            
             logger.add_scalar("Val/loss", val_loss, epoch)
             logger.add_scalar("Val/accuracy", val_acc, epoch)
             logger.add_figure("results", figure, epoch)
+
+            for key, value in val_loss_dict.items():
+                    logger.add_scalar("Val/"+key, value, epoch)
+            for key, value in val_acc_dict.items():
+                logger.add_scalar("Val/"+key, value, epoch)
             print()
 
 
