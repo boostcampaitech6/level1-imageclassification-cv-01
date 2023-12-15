@@ -268,9 +268,16 @@ def train(data_dir, model_dir, args):
                         'accuracy': val_acc,
                     }
                     , f"{save_dir}/best.pth")
-                print(epoch, best_epoch)
                 best_val_acc = val_acc
-            torch.save(model.module.state_dict(), f"{save_dir}/last.pth")
+            torch.save(
+                    {
+                        'epoch': epoch,
+                        'model_state_dict': model.module.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'loss': val_loss,
+                        'accuracy': val_acc,
+                    }
+                    , f"{save_dir}/last{epoch:04d}.pth")
 
 
             print(
@@ -283,7 +290,7 @@ def train(data_dir, model_dir, args):
             print()
 
     ################## 
-    os.rename(f"{save_dir}/best.pth",f"{save_dir}/best_epoch{best_epoch+1}.pth")
+    os.rename(f"{save_dir}/best.pth",f"{save_dir}/best_epoch{best_epoch:04d}.pth")
     ##################
 
 if __name__ == "__main__":
