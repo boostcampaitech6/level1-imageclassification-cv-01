@@ -142,17 +142,9 @@ def train(data_dir, model_dir, args):
     )
 
     # -- model
-    # model_module = getattr(import_module("model"), args.model)  # default: BaseModel
-    # model = model_module(num_classes=num_classes).to(device)
-    # model = torch.nn.DataParallel(model)
-    import torch.nn as nn
-    from torchvision.models import resnet50
-
-    model_finetune = resnet50(True) # pretrained
-    model_finetune.fc = nn.Linear(2048, num_classes, bias=True)
-    model = model_finetune.to(device)
+    model_module = getattr(import_module("model"), args.model)  # default: BaseModel
+    model = model_module(num_classes=num_classes).to(device)
     model = torch.nn.DataParallel(model)
-
         
     # -- loss & metric
     criterion = create_criterion(args.criterion)  # default: cross_entropy
