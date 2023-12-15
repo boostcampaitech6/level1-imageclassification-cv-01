@@ -14,7 +14,7 @@ from datetime import datetime, timezone, timedelta
 import glob
 ##########
 
-def load_model(saved_model, num_classes, device):
+def load_model(saved_model, num_classes, device, model_name):
     """
     저장된 모델의 가중치를 로드하는 함수입니다.
 
@@ -35,10 +35,9 @@ def load_model(saved_model, num_classes, device):
 
     # 모델 가중치를 로드한다.
     ####################
-    # best_epoch?.pth로 생성되므로 glob함수를 사용해 best_epoch*.pth 파일을 전부 가져온다
-    model_path = os.path.join(saved_model, "best_epoch*.pth")
-    best_model_path = glob.glob(model_path)
-    model.load_state_dict(torch.load(best_model_path[-1], map_location=device)['model_state_dict'])
+    model_path = os.path.join(saved_model, model_name)
+    select_model_path = glob.glob(model_path)
+    model.load_state_dict(torch.load(select_model_path[-1], map_location=device)['model_state_dict'])
     ####################
 
     return model
@@ -65,7 +64,7 @@ def inference(data_dir, model_dir, output_dir, args):
 
     # 클래스의 개수를 설정한다. (마스크, 성별, 나이의 조합으로 18)
     num_classes = MaskBaseDataset.num_classes  # 18
-    model = load_model(model_dir, num_classes, device).to(device)
+    model = load_model(model_dir, num_classes, device, args.model_file_name).to(device)
     model.eval()
 
     # 이미지 파일 경로와 정보 파일을 읽어온다.
@@ -144,12 +143,17 @@ if __name__ == "__main__":
         type=str,
         default=os.environ.get("SM_OUTPUT_DATA_DIR", "./output"),
     )
-
+    parser.add_argument( # 입력 안하면 best_epoch.pth를 사용한다.
+        "--model_file_name",
+        type=str,
+        default=os.environ.get("SM_INPUT_MODEL", "best_epoch*.pth"),
+    )
     args = parser.parse_args()
 
     data_dir = args.data_dir
     model_dir = args.model_dir
     output_dir = args.output_dir
+    model_file_name = args.model_file_name
 
     os.makedirs(output_dir, exist_ok=True)
 
