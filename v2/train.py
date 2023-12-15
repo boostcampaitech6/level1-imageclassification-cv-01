@@ -224,11 +224,11 @@ def train(data_dir, model_dir, args):
 
                 for key, value in train_loss_dict.items():
                     logger.add_scalar(
-                        "Train/"+key, value, epoch * len(train_loader) + idx
+                        "Train_cls/"+key, value, epoch * len(train_loader) + idx
                     )
                 for key, value in train_acc_dict.items():
                     logger.add_scalar(
-                        "Train/"+key, value, epoch * len(train_loader) + idx
+                        "Train_cls/"+key, value, epoch * len(train_loader) + idx
                     )
 
                 loss_value = 0
@@ -342,9 +342,9 @@ def train(data_dir, model_dir, args):
             logger.add_figure("results", figure, epoch)
 
             for key, value in val_loss_dict.items():
-                    logger.add_scalar("Val/"+key, value, epoch)
+                    logger.add_scalar("Val_cls/"+key, value, epoch)
             for key, value in val_acc_dict.items():
-                logger.add_scalar("Val/"+key, value, epoch)
+                logger.add_scalar("Val_cls/"+key, value, epoch)
             print()
 
     ################## 
@@ -436,10 +436,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data_dir",
         type=str,
-        default=os.environ.get("SM_CHANNEL_TRAIN", ".../data/train/images"),
+        default=os.environ.get("SM_CHANNEL_TRAIN", "../data/train/images"),
     )
     parser.add_argument(
-        "--model_dir", type=str, default=os.environ.get("SM_MODEL_DIR", ".../model")
+        "--model_dir", type=str, default=os.environ.get("SM_MODEL_DIR", "../model")
     )
 
     args = parser.parse_args()
