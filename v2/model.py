@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
+from torchvision.models import resnet50
 
 class BaseModel(nn.Module):
     """
@@ -48,6 +49,16 @@ class BaseModel(nn.Module):
         x = self.avgpool(x)
         x = x.view(-1, 128)
         return self.fc(x)
+
+
+class Resnet50(nn.Module):
+    def __init__(self, num_classes, pretrained=True):
+        super().__init__()
+        self.resnet = resnet50(pretrained=True)
+        self.resnet.fc = nn.Linear(2048, num_classes, bias=True)
+
+    def forward(self, x):
+        return self.resnet(x)
 
 
 # Custom Model Template
