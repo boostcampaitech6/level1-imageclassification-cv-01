@@ -1,5 +1,8 @@
 import torch.nn as nn
 import torch.nn.functional as F
+import torch
+
+import timm
 
 
 class BaseModel(nn.Module):
@@ -48,6 +51,21 @@ class BaseModel(nn.Module):
         x = self.avgpool(x)
         x = x.view(-1, 128)
         return self.fc(x)
+    
+
+class ConvNext(nn.Module):
+    def __init__(self, num_classes, pretrained=True):
+
+        super(ConvNext, self).__init__()
+
+        self.model = timm.create_model("convnext_small_384_in22ft1k", pretrained=pretrained)
+        # if pretrained:
+        #     self.model.load_state_dict(torch.load("./level1-imageclassification-cv-01/v2/input/convnext_small_22k_1k_384.pth"))
+        self.model.head.fc = nn.Linear(self.model.head.fc.in_features, num_classes)
+        
+    def forward(self, x):
+        x = self.model(x)
+        return x
 
 
 # Custom Model Template
