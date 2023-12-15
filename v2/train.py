@@ -153,6 +153,7 @@ def train(data_dir, model_dir, args):
     model = model_finetune.to(device)
     model = torch.nn.DataParallel(model)
 
+        
     # -- loss & metric
     criterion = create_criterion(args.criterion)  # default: cross_entropy
     opt_module = getattr(import_module("torch.optim"), args.optimizer)  # default: SGD
@@ -161,6 +162,8 @@ def train(data_dir, model_dir, args):
         lr=args.lr,
         weight_decay=5e-4,
     )
+        
+    
     scheduler = StepLR(optimizer, args.lr_decay_step, gamma=0.5)
 
     # -- logging
@@ -170,7 +173,18 @@ def train(data_dir, model_dir, args):
 
     best_val_acc = 0
     best_val_loss = np.inf
-    for epoch in range(args.epochs):
+    best_epoch = 0 
+    
+    start_epoch = 0
+    
+    if args.resume_from:
+        model_data = torch.load(args.resume_from)
+        model.load_state_dict(model_data['model_state_dict'])
+        optimizer.load_state_dict(model_data['optimizer_state_dict'])
+        start_epoch = model_data['epoch'] + 1
+    
+    
+    for epoch in range(start_epoch, args.epochs):
         # train loop
         model.train()
         loss_value = 0
@@ -296,12 +310,31 @@ def train(data_dir, model_dir, args):
             val_acc = np.sum(val_acc_items) / len(val_set)
             best_val_loss = min(best_val_loss, val_loss)
             if val_acc > best_val_acc:
+                best_epoch = epoch
                 print(
                     f"New best model for val accuracy : {val_acc:4.2%}! saving the best model.."
                 )
-                torch.save(model.module.state_dict(), f"{save_dir}/best.pth")
+                torch.save(
+                    {
+                        'epoch': epoch,
+                        'model_state_dict': model.module.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'loss': val_loss,
+                        'accuracy': val_acc,
+                    }
+                    , f"{save_dir}/best.pth")
                 best_val_acc = val_acc
-            torch.save(model.module.state_dict(), f"{save_dir}/last.pth")
+            torch.save(
+                    {
+                        'epoch': epoch,
+                        'model_state_dict': model.module.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'loss': val_loss,
+                        'accuracy': val_acc,
+                    }
+                    , f"{save_dir}/last{epoch:04d}.pth")
+
+
             print(
                 f"[Val] acc : {val_acc:4.2%}, loss: {val_loss:4.2} || "
                 f"best acc : {best_val_acc:4.2%}, best loss: {best_val_loss:4.2}"
@@ -322,11 +355,17 @@ def train(data_dir, model_dir, args):
                 logger.add_scalar("Val/"+key, value, epoch)
             print()
 
+    ################## 
+    os.rename(f"{save_dir}/best.pth",f"{save_dir}/best_epoch{best_epoch:04d}.pth")
+    ##################
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     # Data and model checkpoints directories
+    parser.add_argument(
+        "--resume_from", type=str, help="path of model to resume training"
+    )
     parser.add_argument(
         "--seed", type=int, default=42, help="random seed (default: 42)"
     )
@@ -405,10 +444,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data_dir",
         type=str,
-        default=os.environ.get("SM_CHANNEL_TRAIN", "/opt/ml/input/data/train/images"),
+        default=os.environ.get("SM_CHANNEL_TRAIN", ".../data/train/images"),
     )
     parser.add_argument(
-        "--model_dir", type=str, default=os.environ.get("SM_MODEL_DIR", "./model")
+        "--model_dir", type=str, default=os.environ.get("SM_MODEL_DIR", ".../model")
     )
 
     args = parser.parse_args()
