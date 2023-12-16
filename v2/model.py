@@ -67,3 +67,112 @@ class MyModel(nn.Module):
         2. 결과로 나온 output 을 return 해주세요
         """
         return x
+
+
+class MyModel_VGG19_init_He(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+
+        self.features = nn.Sequential(
+            nn.Conv2d(3,64,3,1,1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64,64,3,1,1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2,2),
+
+            nn.Conv2d(64,128,3,1,1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(128,128,3,1,1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2,2),
+
+            nn.Conv2d(128,256,3,1,1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256,256,3,1,1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256,256,3,1,1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256,256,3,1,1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2,2),
+
+            nn.Conv2d(256,512,3,1,1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(512,512,3,1,1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(512,512,3,1,1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(512,512,3,1,1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2,2),
+
+            nn.Conv2d(512,512,3,1,1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(512,512,3,1,1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(512,512,3,1,1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(512,512,3,1,1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2,2)
+
+        )
+        self.classifier = nn.Sequential(
+            nn.Linear(512 * 7 * 7,4096),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.5),
+            nn.Linear(4096,4096),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.5),
+            nn.Linear(4096,num_classes)
+
+        )
+        # He 초기화를 적용
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    init.constant_(m.bias, 0)
+            elif isinstance(m, nn.Linear):
+                init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    init.constant_(m.bias, 0)
+
+
+    def forward(self, x):
+
+        x = self.features(x)
+        x = torch.flatten(x,1)
+        x = self.classifier(x)
+        return x
+
+class MyModel_VGG19_pre(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+
+        vgg19 = models.vgg19(pretrained=True)
+        
+        self.features = vgg19.features
+
+        self.classifier = nn.Sequential(
+            nn.Linear(512 * 7 * 7,4096),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.5),
+            nn.Linear(4096,4096),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.5),
+            nn.Linear(4096,num_classes)
+
+        )
+
+
+
+    def forward(self, x):
+
+        x = self.features(x)
+        x = torch.flatten(x,1)
+        x = self.classifier(x)
+        return x
