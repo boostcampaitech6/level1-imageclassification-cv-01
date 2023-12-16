@@ -1,6 +1,28 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
+class VGG16model(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+        
+        self.vgg16 = models.vgg16(pretrained=True)
+
+        for param in self.vgg16.features.parameters():
+            param.requires_grad = False
+
+        self.vgg16.classifier = nn.Sequential(
+            nn.Linear(25088, 4096),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(4096, 4096),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(4096, num_classes)
+        )
+
+    def forward(self, x):
+        x = self.vgg16(x)
+        return x
 
 class BaseModel(nn.Module):
     """
