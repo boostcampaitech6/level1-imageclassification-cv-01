@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision.models as models
 
 class VGG16model(nn.Module):
     def __init__(self, num_classes):
