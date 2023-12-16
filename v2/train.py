@@ -224,11 +224,11 @@ def train(data_dir, model_dir, args):
 
                 for key, value in train_loss_dict.items():
                     logger.add_scalar(
-                        "Train/"+key, value, epoch * len(train_loader) + idx
+                        "Train_cls/"+key, value, epoch * len(train_loader) + idx
                     )
                 for key, value in train_acc_dict.items():
                     logger.add_scalar(
-                        "Train/"+key, value, epoch * len(train_loader) + idx
+                        "Train_cls/"+key, value, epoch * len(train_loader) + idx
                     )
 
                 loss_value = 0
@@ -324,7 +324,7 @@ def train(data_dir, model_dir, args):
                         'loss': val_loss,
                         'accuracy': val_acc,
                     }
-                    , f"{save_dir}/last_epoch{epoch:03d}.pth")
+                    , f"{save_dir}/last.pth")
 
 
             print(
@@ -342,13 +342,14 @@ def train(data_dir, model_dir, args):
             logger.add_figure("results", figure, epoch)
 
             for key, value in val_loss_dict.items():
-                    logger.add_scalar("Val/"+key, value, epoch)
+                    logger.add_scalar("Val_cls/"+key, value, epoch)
             for key, value in val_acc_dict.items():
-                logger.add_scalar("Val/"+key, value, epoch)
+                logger.add_scalar("Val_cls/"+key, value, epoch)
             print()
 
     ################## 
     os.rename(f"{save_dir}/best.pth",f"{save_dir}/best_epoch{best_epoch:03d}.pth")
+    os.rename(f"{save_dir}/last.pth",f"{save_dir}/last_epoch{args.epochs-1:03d}.pth")
     ##################
 
 if __name__ == "__main__":
@@ -436,10 +437,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data_dir",
         type=str,
-        default=os.environ.get("SM_CHANNEL_TRAIN", ".../data/train/images"),
+        default=os.environ.get("SM_CHANNEL_TRAIN", "../data/train/images"),
     )
     parser.add_argument(
-        "--model_dir", type=str, default=os.environ.get("SM_MODEL_DIR", ".../model")
+        "--model_dir", type=str, default=os.environ.get("SM_MODEL_DIR", "../model")
     )
 
     args = parser.parse_args()
