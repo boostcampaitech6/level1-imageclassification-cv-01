@@ -324,7 +324,7 @@ def train(data_dir, model_dir, args):
                         'loss': val_loss,
                         'accuracy': val_acc,
                     }
-                    , f"{save_dir}/last_epoch{epoch:03d}.pth")
+                    , f"{save_dir}/last.pth")
 
 
             print(
@@ -349,6 +349,7 @@ def train(data_dir, model_dir, args):
 
     ################## 
     os.rename(f"{save_dir}/best.pth",f"{save_dir}/best_epoch{best_epoch:03d}.pth")
+    os.rename(f"{save_dir}/last.pth",f"{save_dir}/last_epoch{args.epochs-1:03d}.pth")
     ##################
 
 if __name__ == "__main__":
