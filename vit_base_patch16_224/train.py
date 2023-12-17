@@ -319,7 +319,11 @@ if __name__ == "__main__":
         "--optimizer", type=str, default="SGD", help="optimizer type (default: SGD)"
     )
     parser.add_argument(
+<<<<<<< HEAD
         "--lr", type=float, default=1e-4, help="learning rate (default: 1e-3)"
+=======
+        "--lr", type=float, default=1e-3, help="learning rate (default: 1e-3)"
+>>>>>>> 5e6f37d261f68bfd72e52ad98732f9f88bcb970a
     )
     parser.add_argument(
         "--val_ratio",
