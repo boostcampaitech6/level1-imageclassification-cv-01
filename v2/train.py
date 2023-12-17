@@ -166,6 +166,9 @@ def train(data_dir, model_dir, args):
     best_val_acc = 0
     best_val_loss = np.inf
     best_epoch = 0 
+
+    best_val_age60_acc = 0
+    best_epoch_age60 = 0
     
     start_epoch = 0
     
@@ -333,6 +336,19 @@ def train(data_dir, model_dir, args):
                         'accuracy': val_acc,
                     }
                     , f"{save_dir}/last.pth")
+            
+            if val_acc_dict['age_60_acc'] > best_val_age60_acc:
+                best_epoch_age60 = epoch
+                best_val_age60_acc = val_acc_dict['age_60_acc']
+                torch.save(
+                    {
+                        'epoch': epoch,
+                        'model_state_dict': model.module.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'loss': val_loss,
+                        'accuracy': val_acc,
+                    }
+                    , f"{save_dir}/best_age60.pth")
 
 
             print(
@@ -358,6 +374,7 @@ def train(data_dir, model_dir, args):
     ################## 
     os.rename(f"{save_dir}/best.pth",f"{save_dir}/best_epoch{best_epoch:03d}.pth")
     os.rename(f"{save_dir}/last.pth",f"{save_dir}/last_epoch{args.epochs-1:03d}.pth")
+    os.rename(f"{save_dir}/best_age60.pth",f"{save_dir}/best_age60_epoch{best_epoch_age60:03d}.pth")
     ##################
 
 if __name__ == "__main__":
