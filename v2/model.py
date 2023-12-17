@@ -1,5 +1,18 @@
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision import models
+
+class DenseNet(nn.Module):
+    def __init__(self, num_classes):
+        super(DenseNet, self).__init__()
+
+        self.model = models.densenet121(pretrained=True)
+
+        self.model.classifier = nn.Linear(self.model.classifier.in_features, num_classes)
+
+    def forward(self, x):
+
+        return self.model(x)
 
 
 class BaseModel(nn.Module):
