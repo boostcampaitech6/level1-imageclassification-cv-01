@@ -27,11 +27,8 @@ def load_model(saved_model, num_classes, device, model_name):
     Returns:
         model (nn.Module): 가중치가 로드된 모델
     """
-    # model_cls = getattr(import_module("model"), args.model)
-    # model = model_cls(num_classes=num_classes)
-    model = torch.hub.load('NVIDIA/DeepLearningExamples:torchhub', 'nvidia_resneXt')
-    fc_in_features = model.fc.in_features
-    model.fc = nn.Linear(fc_in_features, num_classes)
+    model_cls = getattr(import_module("model"), args.model)
+    model = model_cls(num_classes=num_classes)
 
 
     # tarpath = os.path.join(saved_model, 'best.tar.gz')
@@ -47,7 +44,7 @@ def load_model(saved_model, num_classes, device, model_name):
 
     return model
 
-def load_model_mul(saved_model, num_classes, device):
+def load_model_mul(saved_model, num_classes, device,model_name):
     """
     저장된 모델의 가중치를 로드하는 함수입니다.
 
@@ -61,21 +58,17 @@ def load_model_mul(saved_model, num_classes, device):
     """
     # model_cls = getattr(import_module("model"), args.model)
     # model = model_cls()
-    model_age = torch.hub.load('pytorch/vision:v0.10.0', 'resnext50_32x4d', pretrained=True)
-    model_mask = torch.hub.load('pytorch/vision:v0.10.0', 'resnext50_32x4d', pretrained=True)
-    model_gender = torch.hub.load('pytorch/vision:v0.10.0', 'resnext50_32x4d', pretrained=True)
-    
-    fc_in_features = model_age.fc.in_features
-    model_age.fc = nn.Linear(fc_in_features, 3)
-    model_mask.fc = nn.Linear(fc_in_features, 3)
-    model_gender.fc = nn.Linear(fc_in_features, 2)
+    model_module = getattr(import_module("model"), args.model)  # default: BaseModel
+    model_age = model_module(num_classes=3)
+    model_mask = model_module(num_classes=3)
+    model_gender = model_module(num_classes=2)
 
     # tarpath = os.path.join(saved_model, 'best.tar.gz')
     # tar = tarfile.open(tarpath, 'r:gz')
     # tar.extractall(path=saved_model)
 
     # 모델 가중치를 로드한다.
-    model_path = os.path.join(saved_model, "best.pth")
+    model_path = os.path.join(saved_model, model_name)#"best.pth")
     checkpoint = torch.load(model_path, map_location=device)
 
     age_state_dict = checkpoint.get("model_age", None)
@@ -110,11 +103,16 @@ def inference(data_dir, model_dir, output_dir, args):
 
     # 클래스의 개수를 설정한다. (마스크, 성별, 나이의 조합으로 18)
     num_classes = MaskBaseDataset.num_classes  # 18
-    model_age,model_mask,model_gender = load_model_mul(model_dir, num_classes, device)
-    model_age,model_mask,model_gender = model_age.to(device),model_mask.to(device),model_gender.to(device)
-    model_age.eval()
-    model_mask.eval()
-    model_gender.eval()
+    if(args.model_mode=="multiple"):
+        model_age,model_mask,model_gender = load_model_mul(model_dir, num_classes, device,args.model_file_name)
+        model_age,model_mask,model_gender = model_age.to(device),model_mask.to(device),model_gender.to(device)
+        model_age.eval()
+        model_mask.eval()
+        model_gender.eval()
+    else:
+        model=load_model(model_dir, num_classes, device,args.model_file_name)
+        model=model.to(device)
+        model.eval()
 
     # 이미지 파일 경로와 정보 파일을 읽어온다.
     img_root = os.path.join(data_dir, "images")
@@ -138,11 +136,22 @@ def inference(data_dir, model_dir, output_dir, args):
     with torch.no_grad():
         for idx, images in enumerate(loader):
             images = images.to(device)
-            logits_age,logits_mask,logits_gender = model_age(images),model_mask(images),model_gender(images)
-            pred_age,pred_mask,pred_gender = logits_age.argmax(dim=-1),logits_mask.argmax(dim=-1),logits_gender.argmax(dim=-1)
-            
-            
-            preds.extend(MaskBaseDataset.encode_multi_class(pred_mask,pred_gender,pred_age).cpu().numpy())
+            if(args.model_mode=="multiple"):
+                logits_age,logits_mask,logits_gender = model_age(images),model_mask(images),model_gender(images)
+                pred_age,pred_mask,pred_gender = logits_age.argmax(dim=-1),logits_mask.argmax(dim=-1),logits_gender.argmax(dim=-1)
+                
+                preds.extend(MaskBaseDataset.encode_multi_class(pred_mask,pred_gender,pred_age).cpu().numpy())
+            elif(args.model_mode=="single_multiple"):
+                logits_age,logits_mask,logits_gender = model(images)
+                pred_age,pred_mask,pred_gender = logits_age.argmax(dim=-1),logits_mask.argmax(dim=-1),logits_gender.argmax(dim=-1)
+                
+                preds.extend(MaskBaseDataset.encode_multi_class(pred_mask,pred_gender,pred_age).cpu().numpy())
+                
+            else:
+                logits=model(images)
+                preds=logits.argmax(dim=-1)
+                
+                preds.extend(preds.cpu().numpy())
 
     ############################# 
     KST = timezone(timedelta(hours=9))
@@ -171,11 +180,16 @@ if __name__ == "__main__":
         "--resize",
         nargs=2,
         type=int,
-        default=(96, 128),
+        default=(236,236),#(96, 128),
         help="resize size for image when you trained (default: (96, 128))",
     )
     parser.add_argument(
         "--model", type=str, default="BaseModel", help="model type (default: BaseModel)"
+    )
+    parser.add_argument(
+        "--model_mode",
+        type=str,
+        default="single", help="single/multiple/single_multiple",
     )
 
     # 컨테이너 환경 변수
@@ -187,7 +201,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model_dir",
         type=str,
-        default=os.environ.get("SM_CHANNEL_MODEL", "../../../models/exp"),
+        default=os.environ.get("SM_CHANNEL_MODEL", "../../../models/exp34"),
     )
     parser.add_argument(
         "--output_dir",

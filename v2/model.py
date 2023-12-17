@@ -100,7 +100,6 @@ class ConvNextModel(nn.Module):
             nn.Flatten(start_dim=1, end_dim=-1),
             nn.Linear(in_features=768, out_features=num_classes, bias=True)
         )
-                        
 
 
     def forward(self, x):
@@ -111,6 +110,44 @@ class ConvNextModel(nn.Module):
         x=self.convnext(x)
         
         return x
+    
+class ConvNextModel_3fc(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+
+
+        # Initializing a model (with random weights) from the convnext-tiny-224 style configuration
+        self.convnext = torchvision.models.convnext_tiny(weights='IMAGENET1K_V1')
+        self.convnext.classifier = nn.Identity()
+        
+        self.classifier_age = nn.Sequential(
+            nn.LayerNorm((768,1,1,), eps=1e-06, elementwise_affine=True),
+            nn.Flatten(start_dim=1, end_dim=-1),
+            nn.Linear(in_features=768, out_features=3, bias=True)
+        )
+        self.classifier_mask = nn.Sequential(
+            nn.LayerNorm((768,1,1,), eps=1e-06, elementwise_affine=True),
+            nn.Flatten(start_dim=1, end_dim=-1),
+            nn.Linear(in_features=768, out_features=3, bias=True)
+        )
+        self.classifier_gender = nn.Sequential(
+            nn.LayerNorm((768,1,1,), eps=1e-06, elementwise_affine=True),
+            nn.Flatten(start_dim=1, end_dim=-1),
+            nn.Linear(in_features=768, out_features=2, bias=True)
+        )
+
+
+    def forward(self, x):
+        """
+        1. 위에서 정의한 모델 아키텍쳐를 forward propagation 을 진행해주세요
+        2. 결과로 나온 output 을 return 해주세요
+        """
+        x=self.convnext(x)
+        age=self.classifier_age(x)
+        mask=self.classifier_mask(x)
+        gender=self.classifier_gender(x)
+        
+        return age,mask,gender
 
 class ConvNext_timm(nn.Module):
     def __init__(self, num_classes, pretrained=True):

@@ -21,6 +21,8 @@ import torchvision.models as models
 from dataset import MaskBaseDataset
 from loss import create_criterion
 
+from accuracy_loss_print import AccuracyLoss
+
 
 def seed_everything(seed):
     torch.manual_seed(seed)
@@ -175,7 +177,9 @@ def train(data_dir, model_dir, args):
     # model_gender = model_gender.to(device)
 
     # -- loss & metric
-    criterion = create_criterion(args.criterion)  # default: cross_entropy
+    criterion_age = create_criterion(args.criterion)  # default: cross_entropy
+    criterion_mask = create_criterion(args.criterion)
+    criterion_gender = create_criterion(args.criterion)
     opt_module = getattr(import_module("torch.optim"), args.optimizer)  # default: SGD
     optimizer_age = opt_module(
         filter(lambda p: p.requires_grad, model_age.parameters()),
@@ -204,6 +208,7 @@ def train(data_dir, model_dir, args):
     best_val_acc = 0
     best_val_loss = np.inf
     for epoch in range(args.epochs):
+        torch.cuda.empty_cache()
         # train loop
         model_age.train()
         model_mask.train()
@@ -223,7 +228,7 @@ def train(data_dir, model_dir, args):
 
             logits = model_age(inputs)
             preds_age = torch.argmax(logits, dim=-1)
-            loss_age = criterion(logits, age_label)
+            loss_age = criterion_age(logits, age_label)
 
             loss_age.backward()
             optimizer_age.step()
@@ -233,7 +238,7 @@ def train(data_dir, model_dir, args):
 
             logits = model_mask(inputs)
             preds_mask = torch.argmax(logits, dim=-1)
-            loss_mask = criterion(logits, mask_label)
+            loss_mask = criterion_mask(logits, mask_label)
 
             loss_mask.backward()
             optimizer_mask.step()
@@ -243,7 +248,7 @@ def train(data_dir, model_dir, args):
 
             logits = model_gender(inputs)
             preds_gender = torch.argmax(logits, dim=-1)
-            loss_gender = criterion(logits, gender_label)
+            loss_gender = criterion_gender(logits, gender_label)
 
             loss_gender.backward()
             optimizer_gender.step()
@@ -299,7 +304,7 @@ def train(data_dir, model_dir, args):
                 logits_age, logits_mask, logits_gender = model_age(inputs),model_mask(inputs),model_gender(inputs)
                 preds_age,preds_mask,preds_gender = torch.argmax(logits_age, dim=-1),torch.argmax(logits_mask, dim=-1),torch.argmax(logits_gender, dim=-1)
 
-                loss_item_age, loss_item_mask, loss_item_gender = criterion(logits_age, age_label).item(),criterion(logits_mask, mask_label).item(),criterion(logits_gender, gender_label).item()
+                loss_item_age, loss_item_mask, loss_item_gender = criterion_age(logits_age, age_label).item(),criterion_mask(logits_mask, mask_label).item(),criterion_gender(logits_gender, gender_label).item()
                 acc=(age_label==preds_age) & (mask_label==preds_mask) & (gender_label==preds_gender)
                 acc_item = acc.sum().item()
                 val_loss_items_age.append(loss_item_age)
@@ -378,13 +383,13 @@ if __name__ == "__main__":
         "--resize",
         nargs=2,
         type=int,
-        default=[288,224],#[128, 96],
+        default=[236,236],#[128, 96],
         help="resize size for image when training",
     )
     parser.add_argument(
         "--batch_size",
         type=int,
-        default=32,
+        default=64,
         help="input batch size for training (default: 64)",
     )
     parser.add_argument(
@@ -394,7 +399,7 @@ if __name__ == "__main__":
         help="input batch size for validing (default: 1000)",
     )
     parser.add_argument(
-        "--model", type=str, default="ConvNext_timm", help="model type (default: BaseModel)"
+        "--model", type=str, default="ConvNextModel", help="model type (default: BaseModel)"
     )
     parser.add_argument(
         "--optimizer", type=str, default="Adam", help="optimizer type (default: SGD)"

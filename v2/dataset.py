@@ -15,7 +15,8 @@ from torchvision.transforms import (
     Compose,
     CenterCrop,
     ColorJitter,
-    RandomHorizontalFlip
+    RandomHorizontalFlip,
+    Lambda
 )
 
 # 지원되는 이미지 확장자 리스트
@@ -62,8 +63,13 @@ class BaseAugmentation:
         """
         self.transform = Compose(
             [
+                # Resize(resize, Image.BILINEAR),
+                # ToTensor(),
+                # Normalize(mean=mean, std=std),
                 Resize(resize, Image.BILINEAR),
+                CenterCrop((224, 224)),
                 ToTensor(),
+                # Lambda(lambda x: x / 255.0),
                 Normalize(mean=mean, std=std),
             ]
         )
@@ -192,8 +198,8 @@ class MaskBaseDataset(Dataset):
     def __init__(
         self,
         data_dir,
-        mean=(0.548, 0.504, 0.479),
-        std=(0.237, 0.247, 0.246),
+        mean=(0.485, 0.456, 0.406),#(0.548, 0.504, 0.479),
+        std=(0.229, 0.224, 0.225),#(0.237, 0.247, 0.246),
         val_ratio=0.2,
     ):
         self.data_dir = data_dir
@@ -266,7 +272,7 @@ class MaskBaseDataset(Dataset):
         multi_class_label = self.encode_multi_class(mask_label, gender_label, age_label)
 
         image_transform = self.transform(image)
-        return image_transform, multi_class_label#age_label,mask_label,gender_label
+        return image_transform, age_label,mask_label,gender_label
 
     def __len__(self):
         """데이터셋의 길이를 반환하는 메서드"""
