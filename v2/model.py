@@ -53,14 +53,25 @@ class BaseModel(nn.Module):
         return self.fc(x)
     
 
-class ConvNext(nn.Module):
+class ConvNextSmall(nn.Module):
     def __init__(self, num_classes, pretrained=True):
 
-        super(ConvNext, self).__init__()
+        super(ConvNextSmall, self).__init__()
 
         self.model = timm.create_model("convnext_small_384_in22ft1k", pretrained=pretrained)
-        # if pretrained:
-        #     self.model.load_state_dict(torch.load("./level1-imageclassification-cv-01/v2/input/convnext_small_22k_1k_384.pth"))
+        self.model.head.fc = nn.Linear(self.model.head.fc.in_features, num_classes)
+        
+    def forward(self, x):
+        x = self.model(x)
+        return x
+
+
+class ConvNextTiny(nn.Module):
+    def __init__(self, num_classes, pretrained=True):
+
+        super(ConvNextTiny, self).__init__()
+
+        self.model = timm.create_model("convnext_tiny.fb_in22k_ft_in1k_384", pretrained=pretrained)
         self.model.head.fc = nn.Linear(self.model.head.fc.in_features, num_classes)
         
     def forward(self, x):
