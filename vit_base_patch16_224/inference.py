@@ -5,17 +5,12 @@ from importlib import import_module
 
 import pandas as pd
 import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from dataset import TestDataset, MaskBaseDataset
 
-##########
-from datetime import datetime, timezone, timedelta
-import glob
-##########
 
-def load_model(saved_model, num_classes, device, model_name):
+def load_model(saved_model, num_classes, device):
     """
     저장된 모델의 가중치를 로드하는 함수입니다.
 
@@ -27,48 +22,8 @@ def load_model(saved_model, num_classes, device, model_name):
     Returns:
         model (nn.Module): 가중치가 로드된 모델
     """
-    # model_cls = getattr(import_module("model"), args.model)
-    # model = model_cls(num_classes=num_classes)
-    model = torch.hub.load('NVIDIA/DeepLearningExamples:torchhub', 'nvidia_resneXt')
-    fc_in_features = model.fc.in_features
-    model.fc = nn.Linear(fc_in_features, num_classes)
-
-
-    # tarpath = os.path.join(saved_model, 'best.tar.gz')
-    # tar = tarfile.open(tarpath, 'r:gz')
-    # tar.extractall(path=saved_model)
-
-    # 모델 가중치를 로드한다.
-    ####################
-    model_path = os.path.join(saved_model, model_name)
-    select_model_path = glob.glob(model_path)
-    model.load_state_dict(torch.load(select_model_path[-1], map_location=device)['model_state_dict'])
-    ####################
-
-    return model
-
-def load_model_mul(saved_model, num_classes, device):
-    """
-    저장된 모델의 가중치를 로드하는 함수입니다.
-
-    Args:
-        saved_model (str): 모델 가중치가 저장된 디렉토리 경로
-        num_classes (int): 모델의 클래수 수
-        device (torch.device): 모델이 로드될 장치 (CPU 또는 CUDA)
-
-    Returns:
-        model (nn.Module): 가중치가 로드된 모델
-    """
-    # model_cls = getattr(import_module("model"), args.model)
-    # model = model_cls()
-    model_age = torch.hub.load('pytorch/vision:v0.10.0', 'resnext50_32x4d', pretrained=True)
-    model_mask = torch.hub.load('pytorch/vision:v0.10.0', 'resnext50_32x4d', pretrained=True)
-    model_gender = torch.hub.load('pytorch/vision:v0.10.0', 'resnext50_32x4d', pretrained=True)
-    
-    fc_in_features = model_age.fc.in_features
-    model_age.fc = nn.Linear(fc_in_features, 3)
-    model_mask.fc = nn.Linear(fc_in_features, 3)
-    model_gender.fc = nn.Linear(fc_in_features, 2)
+    model_cls = getattr(import_module("model"), args.model)
+    model = model_cls(num_classes=num_classes)
 
     # tarpath = os.path.join(saved_model, 'best.tar.gz')
     # tar = tarfile.open(tarpath, 'r:gz')
@@ -76,17 +31,9 @@ def load_model_mul(saved_model, num_classes, device):
 
     # 모델 가중치를 로드한다.
     model_path = os.path.join(saved_model, "best.pth")
-    checkpoint = torch.load(model_path, map_location=device)
+    model.load_state_dict(torch.load(model_path, map_location=device))
 
-    age_state_dict = checkpoint.get("model_age", None)
-    mask_state_dict = checkpoint.get("model_mask", None)
-    gender_state_dict = checkpoint.get("model_gender", None)
-            
-    model_age.load_state_dict(age_state_dict)
-    model_mask.load_state_dict(mask_state_dict)
-    model_gender.load_state_dict(gender_state_dict)
-
-    return model_age,model_mask,model_gender
+    return model
 
 
 @torch.no_grad()
@@ -110,11 +57,8 @@ def inference(data_dir, model_dir, output_dir, args):
 
     # 클래스의 개수를 설정한다. (마스크, 성별, 나이의 조합으로 18)
     num_classes = MaskBaseDataset.num_classes  # 18
-    model_age,model_mask,model_gender = load_model_mul(model_dir, num_classes, device)
-    model_age,model_mask,model_gender = model_age.to(device),model_mask.to(device),model_gender.to(device)
-    model_age.eval()
-    model_mask.eval()
-    model_gender.eval()
+    model = load_model(model_dir, num_classes, device).to(device)
+    model.eval()
 
     # 이미지 파일 경로와 정보 파일을 읽어온다.
     img_root = os.path.join(data_dir, "images")
@@ -138,20 +82,13 @@ def inference(data_dir, model_dir, output_dir, args):
     with torch.no_grad():
         for idx, images in enumerate(loader):
             images = images.to(device)
-            logits_age,logits_mask,logits_gender = model_age(images),model_mask(images),model_gender(images)
-            pred_age,pred_mask,pred_gender = logits_age.argmax(dim=-1),logits_mask.argmax(dim=-1),logits_gender.argmax(dim=-1)
-            
-            
-            preds.extend(MaskBaseDataset.encode_multi_class(pred_mask,pred_gender,pred_age).cpu().numpy())
-
-    ############################# 
-    KST = timezone(timedelta(hours=9))
-    current_time = datetime.now(KST).strftime("%Y-%m-%d_%H-%M-%S")
-    #############################
+            pred = model(images)
+            pred = pred.argmax(dim=-1)
+            preds.extend(pred.cpu().numpy())
 
     # 예측 결과를 데이터프레임에 저장하고 csv 파일로 출력한다.
     info["ans"] = preds
-    save_path = os.path.join(output_dir, f"{current_time}.csv")
+    save_path = os.path.join(output_dir, f"output.csv")
     info.to_csv(save_path, index=False)
     print(f"Inference Done! Inference result saved at {save_path}")
 
@@ -182,29 +119,24 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data_dir",
         type=str,
-        default=os.environ.get("SM_CHANNEL_EVAL", "../../../eval"),
+        default=os.environ.get("SM_CHANNEL_EVAL", "/opt/ml/input/data/eval"),
     )
     parser.add_argument(
         "--model_dir",
         type=str,
-        default=os.environ.get("SM_CHANNEL_MODEL", "../../../models/exp"),
+        default=os.environ.get("SM_CHANNEL_MODEL", "./model/exp"),
     )
     parser.add_argument(
         "--output_dir",
         type=str,
-        default=os.environ.get("SM_OUTPUT_DATA_DIR", "../../../output"),
+        default=os.environ.get("SM_OUTPUT_DATA_DIR", "./output"),
     )
-    parser.add_argument( # 입력 안하면 best_epoch.pth를 사용한다.
-        "--model_file_name",
-        type=str,
-        default=os.environ.get("SM_INPUT_MODEL", "best_epoch*.pth"),
-    )
+
     args = parser.parse_args()
 
     data_dir = args.data_dir
     model_dir = args.model_dir
     output_dir = args.output_dir
-    model_file_name = args.model_file_name
 
     os.makedirs(output_dir, exist_ok=True)
 
