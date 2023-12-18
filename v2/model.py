@@ -1,7 +1,45 @@
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision.models as models
 
+class MyModel_efficient_v2_s(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
 
+        efficient = models.efficientnet_v2_s(pretrained=True)
+        self.features = efficient.features
+
+        self.classifier = nn.Sequential(
+            nn.Dropout(p=0.2,inplace = True),
+            nn.Linear(in_features=1280, out_features=18, bias=True)
+
+        )
+
+    def forward(self, x):
+        x = self.features(x)
+        x = x.mean([2, 3])
+        x = self.classifier(x)
+        return x
+
+class MyModel_efficient_v2_l(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+
+        efficient = models.efficientnet_v2_l(pretrained=True)
+        self.features = efficient.features
+
+        self.classifier = nn.Sequential(
+            nn.Dropout(p=0.4,inplace = True),
+            nn.Linear(in_features=1280, out_features=18, bias=True)
+
+        )
+
+    def forward(self, x):
+        x = self.features(x)
+        x = x.mean([2, 3])
+        x = self.classifier(x)
+        return x
+    
 class BaseModel(nn.Module):
     """
     기본적인 컨볼루션 신경망 모델
