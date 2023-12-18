@@ -147,9 +147,9 @@ def train(data_dir, model_dir, args):
     model = torch.nn.DataParallel(model)
         
     # -- loss & metric
-    criterion_age = create_criterion(args.criterion_age)  # default: cross_entropy
-    criterion_mask = create_criterion(args.criterion_mask)
-    criterion_gender = create_criterion(args.criterion_gender)
+    criterion_age = create_criterion(args.criterion_age,classes=3)  # default: f1
+    criterion_mask = create_criterion(args.criterion_mask,classes=3)
+    criterion_gender = create_criterion(args.criterion_gender,classes=2)
     
     opt_module = getattr(import_module("torch.optim"), args.optimizer)  # default: SGD
     optimizer = opt_module(
@@ -402,13 +402,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--criterion_mask",
         type=str,
-        default="cross_entropy",
+        default="f1",
         help="criterion type for mask(default: f1)",
     )
     parser.add_argument(
         "--criterion_gender",
         type=str,
-        default="cross_entropy",
+        default="f1",
         help="criterion type for gender(default: f1)",
     )
     parser.add_argument(
