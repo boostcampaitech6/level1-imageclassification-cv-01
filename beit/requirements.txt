@@ -14,7 +14,6 @@ sentencepiece
 pyarrow
 torchmetrics==0.7.3
 transformers
-deepspeed==0.4.0
 pycocotools
 pycocoevalcap
 torchscale==0.2.0
