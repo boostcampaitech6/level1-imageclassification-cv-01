@@ -94,7 +94,8 @@ class ConvNextModel(nn.Module):
 
 
         # Initializing a model (with random weights) from the convnext-tiny-224 style configuration
-        self.convnext = torchvision.models.convnext_tiny(weights='IMAGENET1K_V1')
+        #self.convnext = torchvision.models.convnext_tiny(weights='IMAGENET1K_V1')
+        self.convnext = torchvision.models.convnext_small(weights='IMAGENET1K_V1')
         self.convnext.classifier = nn.Sequential(
             nn.LayerNorm((768,1,1,), eps=1e-06, elementwise_affine=True),
             nn.Flatten(start_dim=1, end_dim=-1),
@@ -117,7 +118,8 @@ class ConvNextModel_3fc(nn.Module):
 
 
         # Initializing a model (with random weights) from the convnext-tiny-224 style configuration
-        self.convnext = torchvision.models.convnext_tiny(weights='IMAGENET1K_V1')
+        #self.convnext = torchvision.models.convnext_tiny(weights='IMAGENET1K_V1')
+        self.convnext = torchvision.models.convnext_small(weights='IMAGENET1K_V1')
         self.convnext.classifier = nn.Identity()
         
         self.classifier_age = nn.Sequential(
@@ -167,7 +169,7 @@ class ConvNext_timm(nn.Module):
 
 
 
-#convnext_model = ConvNextModel(3)#torchvision.models.convnext_tiny(weights='IMAGENET1K_V1')
+# convnext_model = torchvision.models.convnext_small(weights='IMAGENET1K_V1')
 
 
 # Print the model architecture

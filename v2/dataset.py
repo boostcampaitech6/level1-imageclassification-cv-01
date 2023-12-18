@@ -66,6 +66,11 @@ class BaseAugmentation:
                 # Resize(resize, Image.BILINEAR),
                 # ToTensor(),
                 # Normalize(mean=mean, std=std),
+                ##convnext_tiny:
+                # Resize(resize, Image.BILINEAR),
+                # CenterCrop((224, 224)),
+                # ToTensor(),
+                # Normalize(mean=mean, std=std),
                 Resize(resize, Image.BILINEAR),
                 CenterCrop((224, 224)),
                 ToTensor(),
@@ -401,12 +406,16 @@ class TestDataset(Dataset):
     """테스트 데이터셋 클래스"""
 
     def __init__(
-        self, img_paths, resize, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246)
+        self, img_paths, resize, 
+        mean=(0.485, 0.456, 0.406),
+        std=(0.229, 0.224, 0.225),
+        #mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246)
     ):
         self.img_paths = img_paths
         self.transform = Compose(
             [
                 Resize(resize, Image.BILINEAR),
+                CenterCrop((224, 224)),
                 ToTensor(),
                 Normalize(mean=mean, std=std),
             ]
