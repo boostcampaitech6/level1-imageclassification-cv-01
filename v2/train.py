@@ -382,6 +382,9 @@ if __name__ == "__main__":
 
     # Data and model checkpoints directories
     parser.add_argument(
+        "--resume_from", type=str, help="path of model to resume training"
+    )
+    parser.add_argument(
         "--seed", type=int, default=42, help="random seed (default: 42)"
     )
     parser.add_argument(
