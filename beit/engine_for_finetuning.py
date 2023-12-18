@@ -445,7 +445,7 @@ def get_handler(args):
         return RetrievalHandler()
     elif args.task in ("coco_captioning", "nocaps"):
         return CaptioningHandler(args)
-    elif args.task in ("imagenet"):
+    elif args.task in ("imagenet", "mask"):
         return ImageNetHandler(args)
     else:
         raise NotImplementedError("Sorry, %s is not support." % args.task)
