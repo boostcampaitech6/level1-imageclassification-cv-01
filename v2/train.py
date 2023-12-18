@@ -382,19 +382,16 @@ if __name__ == "__main__":
 
     # Data and model checkpoints directories
     parser.add_argument(
-        "--resume_from", type=str, help="path of model to resume training"
-    )
-    parser.add_argument(
         "--seed", type=int, default=42, help="random seed (default: 42)"
     )
     parser.add_argument(
-        "--epochs", type=int, default=10, help="number of epochs to train (default: 1)"
+        "--epochs", type=int, default=10, help="number of epochs to train (default: 10)"
     )
     parser.add_argument(
         "--dataset",
         type=str,
         default="MaskSplitByProfileDataset",
-        help="dataset augmentation type (default: MaskBaseDataset)",
+        help="dataset augmentation type (default: MaskSplitByProfileDataset)",
     )
     parser.add_argument(
         "--augmentation",
@@ -406,7 +403,7 @@ if __name__ == "__main__":
         "--resize",
         nargs=2,
         type=int,
-        default=[236,236],#[128, 96],
+        default=[128, 96],
         help="resize size for image when training",
     )
     parser.add_argument(
@@ -422,13 +419,13 @@ if __name__ == "__main__":
         help="input batch size for validing (default: 1000)",
     )
     parser.add_argument(
-        "--model", type=str, default="ConvNextModel", help="model type (default: BaseModel)"
+        "--model", type=str, default="BaseModel", help="model type (default: BaseModel)"
     )
     parser.add_argument(
-        "--optimizer", type=str, default="Adam", help="optimizer type (default: SGD)"
+        "--optimizer", type=str, default="SGD", help="optimizer type (default: SGD)"
     )
     parser.add_argument(
-        "--lr", type=float, default=1e-4, help="learning rate (default: 1e-3)"
+        "--lr", type=float, default=1e-3, help="learning rate (default: 1e-3)"
     )
     parser.add_argument(
         "--val_ratio",
@@ -465,7 +462,7 @@ if __name__ == "__main__":
         default=os.environ.get("SM_CHANNEL_TRAIN", "../../../train/images"),
     )
     parser.add_argument(
-        "--model_dir", type=str, default=os.environ.get("SM_MODEL_DIR", "../model")
+        "--model_dir", type=str, default=os.environ.get("SM_MODEL_DIR", "./model")
     )
 
     args = parser.parse_args()

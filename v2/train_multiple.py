@@ -150,31 +150,6 @@ def train(data_dir, model_dir, args):
     model_mask = model_module(num_classes=3).to(device)
     model_gender = model_module(num_classes=2).to(device)
 
-    # #resnext50
-    # model_age = torch.hub.load('pytorch/vision:v0.10.0', 'resnext50_32x4d', pretrained=True)
-    # model_mask = torch.hub.load('pytorch/vision:v0.10.0', 'resnext50_32x4d', pretrained=True)
-    # model_gender = torch.hub.load('pytorch/vision:v0.10.0', 'resnext50_32x4d', pretrained=True)
-
-    # #resnext101
-    # model_age = torch.hub.load('NVIDIA/DeepLearningExamples:torchhub', 'nvidia_resneXt')#'pytorch/vision:v0.10.0', 'resnext101_32x4d', pretrained=True)
-    # model_mask = torch.hub.load('NVIDIA/DeepLearningExamples:torchhub', 'nvidia_resneXt')
-    # model_gender = torch.hub.load('NVIDIA/DeepLearningExamples:torchhub', 'nvidia_resneXt')
-    # freezing
-    # for param in model_age.parameters():
-    #     param.requires_grad = False
-    # for param in model_mask.parameters():
-    #     param.requires_grad = False
-    # for param in model_gender.parameters():
-    #     param.requires_grad = False
-    
-    # # fc layer 수정!!
-    # fc_in_features = model_age.fc.in_features
-    # model_age.fc = nn.Linear(fc_in_features, 3)
-    # model_mask.fc = nn.Linear(fc_in_features, 3)
-    # model_gender.fc = nn.Linear(fc_in_features, 2)
-    # model_age = model_age.to(device)
-    # model_mask = model_mask.to(device)
-    # model_gender = model_gender.to(device)
 
     # -- loss & metric
     criterion_age = create_criterion(args.criterion)  # default: cross_entropy
@@ -218,7 +193,8 @@ def train(data_dir, model_dir, args):
         loss_val_gender = 0
         matches = 0
         for idx, train_batch in enumerate(train_loader):
-            inputs, age_label,mask_label,gender_label = train_batch
+            inputs, labels = train_batch
+            mask_label,gender_label, age_label = MaskBaseDataset.decode_multi_class(labels)
             
             inputs = inputs.to(device)
             age_label,mask_label,gender_label = torch.tensor(age_label).to(device),torch.tensor(mask_label).to(device),torch.tensor(gender_label).to(device)
@@ -297,7 +273,9 @@ def train(data_dir, model_dir, args):
             val_acc_items = []
             figure = None
             for val_batch in val_loader:
-                inputs, age_label,mask_label,gender_label = val_batch
+                inputs, labels = val_batch
+                mask_label,gender_label, age_label = MaskBaseDataset.decode_multi_class(labels)
+                
                 inputs = inputs.to(device)
                 age_label,mask_label,gender_label = torch.tensor(age_label).to(device),torch.tensor(mask_label).to(device),torch.tensor(gender_label).to(device)
 
@@ -311,6 +289,8 @@ def train(data_dir, model_dir, args):
                 val_loss_items_mask.append(loss_item_mask)
                 val_loss_items_gender.append(loss_item_gender)
                 val_acc_items.append(acc_item)
+                
+                preds=MaskBaseDataset.encode_multi_class(preds_mask,preds_gender,preds_age)
 
                 if figure is None:
                     inputs_np = (
@@ -321,8 +301,8 @@ def train(data_dir, model_dir, args):
                     )
                     figure = grid_image(
                         inputs_np,
-                        age_label,
-                        preds_age,
+                        labels,
+                        preds,
                         n=16,
                         shuffle=args.dataset != "MaskSplitByProfileDataset",
                     )
@@ -330,6 +310,9 @@ def train(data_dir, model_dir, args):
             val_loss_age = np.sum(val_loss_items_age) / len(val_loader)
             val_loss_mask = np.sum(val_loss_items_mask) / len(val_loader)
             val_loss_gender = np.sum(val_loss_items_gender) / len(val_loader)
+            
+            val_loss = loss_mask + loss_age + loss_gender
+            
             val_acc = np.sum(val_acc_items) / len(val_set)
             best_val_loss = min(best_val_loss, (val_loss_age+val_loss_mask+val_loss_gender)/3)
             if val_acc > best_val_acc:
@@ -351,7 +334,7 @@ def train(data_dir, model_dir, args):
                 f"[Val] acc : {val_acc:4.2%}, age loss: {val_loss_age:4.2} || val loss: {val_loss_mask:4.2} || gender loss: {val_loss_gender:4.2} "
                 f"best acc : {best_val_acc:4.2%}, best loss: {best_val_loss:4.2}"
             )
-            logger.add_scalar("Val/loss", val_loss_age, epoch)
+            logger.add_scalar("Val/loss", val_loss, epoch)
             logger.add_scalar("Val/accuracy", val_acc, epoch)
             logger.add_figure("results", figure, epoch)
             print()
@@ -365,13 +348,13 @@ if __name__ == "__main__":
         "--seed", type=int, default=42, help="random seed (default: 42)"
     )
     parser.add_argument(
-        "--epochs", type=int, default=10, help="number of epochs to train (default: 1)"
+        "--epochs", type=int, default=10, help="number of epochs to train (default: 10)"
     )
     parser.add_argument(
         "--dataset",
         type=str,
         default="MaskSplitByProfileDataset",
-        help="dataset augmentation type (default: MaskBaseDataset)",
+        help="dataset augmentation type (default: MaskSplitByProfileDataset)",
     )
     parser.add_argument(
         "--augmentation",
@@ -383,7 +366,7 @@ if __name__ == "__main__":
         "--resize",
         nargs=2,
         type=int,
-        default=[236,236],#[128, 96],
+        default=[128, 96],
         help="resize size for image when training",
     )
     parser.add_argument(
@@ -399,13 +382,13 @@ if __name__ == "__main__":
         help="input batch size for validing (default: 1000)",
     )
     parser.add_argument(
-        "--model", type=str, default="ConvNextModel", help="model type (default: BaseModel)"
+        "--model", type=str, default="BaseModel", help="model type (default: BaseModel)"
     )
     parser.add_argument(
-        "--optimizer", type=str, default="Adam", help="optimizer type (default: SGD)"
+        "--optimizer", type=str, default="SGD", help="optimizer type (default: SGD)"
     )
     parser.add_argument(
-        "--lr", type=float, default=1e-4, help="learning rate (default: 1e-3)"
+        "--lr", type=float, default=1e-3, help="learning rate (default: 1e-3)"
     )
     parser.add_argument(
         "--val_ratio",
