@@ -439,8 +439,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--criterion",
         type=str,
-        default="cross_entropy",
-        help="criterion type (default: cross_entropy)",
+        default="f1",
+        help="criterion type (default: f1)",
     )
     parser.add_argument(
         "--lr_decay_step",
