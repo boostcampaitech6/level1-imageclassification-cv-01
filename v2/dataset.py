@@ -67,10 +67,6 @@ class BaseAugmentation:
                 # ToTensor(),
                 # Normalize(mean=mean, std=std),
                 ##convnext_tiny:
-                # Resize(resize, Image.BILINEAR),
-                # CenterCrop((224, 224)),
-                # ToTensor(),
-                # Normalize(mean=mean, std=std),
                 Resize(resize, Image.BILINEAR),
                 CenterCrop((224, 224)),
                 ToTensor(),
