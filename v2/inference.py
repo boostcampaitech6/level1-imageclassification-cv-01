@@ -149,9 +149,9 @@ def inference(data_dir, model_dir, output_dir, args):
                 
             else:
                 logits=model(images)
-                preds=logits.argmax(dim=-1)
+                preds1=logits.argmax(dim=-1)
                 
-                preds.extend(preds.cpu().numpy())
+                preds.extend(preds1.cpu().numpy())
 
     ############################# 
     KST = timezone(timedelta(hours=9))
@@ -201,7 +201,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model_dir",
         type=str,
-        default=os.environ.get("SM_CHANNEL_MODEL", "../../../models/exp34"),
+        default=os.environ.get("SM_CHANNEL_MODEL", "../../../models/exp32"),
     )
     parser.add_argument(
         "--output_dir",
