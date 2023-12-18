@@ -1,28 +1,87 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
 
-class VGG16model(nn.Module):
+import torchvision.models as models
+import torch.nn.init as init
+
+
+class VGG16(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
-        
-        self.vgg16 = models.vgg16(pretrained=True)
-
-        for param in self.vgg16.features.parameters():
-            param.requires_grad = False
-
-        self.vgg16.classifier = nn.Sequential(
-            nn.Linear(25088, 4096),
+    
+        self.features = nn.Sequential(
+            # conv1
+            nn.Conv2d(3, 64, 3, padding=1),
             nn.ReLU(),
-            nn.Dropout(0.5),
+            nn.Conv2d(64, 64, 3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2, stride=2),
+
+            # conv2
+            nn.Conv2d(64, 128, 3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(128, 128, 3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2, stride=2),
+
+            # conv3
+            nn.Conv2d(128, 256, 3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(256, 256, 3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(256, 256, 3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2, stride=2),
+
+            # conv4
+            nn.Conv2d(256, 512, 3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(512, 512, 3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(512, 512, 3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2, stride=2),
+
+            # conv5
+            nn.Conv2d(512, 512, 3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(512, 512, 3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(512, 512, 3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2, stride=2)
+        )
+        
+        self.classifier = nn.Sequential(
+            nn.Linear(512 * 7 * 7, 4096),
+            nn.ReLU(),
+            nn.Dropout(),
             nn.Linear(4096, 4096),
             nn.ReLU(),
-            nn.Dropout(0.5),
+            nn.Dropout(),
             nn.Linear(4096, num_classes)
         )
+        
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    init.constant_(m.bias, 0)
+            elif isinstance(m, nn.Linear):
+                init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    init.constant_(m.bias, 0)
 
     def forward(self, x):
-        x = self.vgg16(x)
+        x = self.features(x)
+        x = torch.flatten(x, 1)
+        x = self.classifier(x)
+        
         return x
 
 class BaseModel(nn.Module):
