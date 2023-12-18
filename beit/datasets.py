@@ -6,6 +6,7 @@
 # --------------------------------------------------------'
 
 import os
+import shutil
 import json
 import random
 import torch
@@ -20,7 +21,7 @@ from timm.data import create_transform
 import utils
 from glossary import normalize_word
 from randaug import RandomAugment
-
+from enum import Enum
 
 class BaseDataset(torch.utils.data.Dataset):
     def __init__(
@@ -349,7 +350,178 @@ class ImageNetDataset(BaseDataset):
              class_to_idx=class_to_idx, split="val",
         )
 
+class MaskLabels(int, Enum):
+    """마스크 라벨을 나타내는 Enum 클래스"""
 
+    MASK = 0
+    INCORRECT = 1
+    NORMAL = 2
+    
+    @classmethod
+    def from_str(cls, value: str) -> int:
+        if value in ["mask1", "mask2", "mask3", "mask4", "mask5"]:
+            return cls.MASK
+        elif value == "incorrect":
+            return cls.INCORRECT
+        elif value == "normal":
+            return cls.NORMAL
+        else:
+            raise ValueError(
+                f"Mask state should be one of 'mask1~5', 'incorrect', 'normal', not {value}"
+            )
+            
+
+class GenderLabels(int, Enum):
+    """성별 라벨을 나타내는 Enum 클래스"""
+
+    MALE = 0
+    FEMALE = 1
+
+    @classmethod
+    def from_str(cls, value: str) -> int:
+        """문자열로부터 해당하는 성별 라벨을 찾아 반환하는 클래스 메서드"""
+        value = value.lower()
+        if value == "male":
+            return cls.MALE
+        elif value == "female":
+            return cls.FEMALE
+        else:
+            raise ValueError(
+                f"Gender value should be either 'male' or 'female', {value}"
+            )
+
+class AgeLabels(int, Enum):
+    """나이 라벨을 나타내는 Enum 클래스"""
+
+    YOUNG = 0
+    MIDDLE = 1
+    OLD = 2
+
+    @classmethod
+    def from_number(cls, value: str) -> int:
+        """숫자로부터 해당하는 나이 라벨을 찾아 반환하는 클래스 메서드"""
+        try:
+            value = int(value)
+        except Exception:
+            raise ValueError(f"Age value should be numeric, {value}")
+
+        if value < 30:
+            return cls.YOUNG
+        elif value < 60:
+            return cls.MIDDLE
+        else:
+            return cls.OLD
+
+class MaskDataset(BaseDataset):
+    """마스크 데이터셋의 기본 클래스"""
+
+    _file_names = {
+        "mask1": MaskLabels.MASK,
+        "mask2": MaskLabels.MASK,
+        "mask3": MaskLabels.MASK,
+        "mask4": MaskLabels.MASK,
+        "mask5": MaskLabels.MASK,
+        "incorrect_mask": MaskLabels.INCORRECT,
+        "normal": MaskLabels.NORMAL,
+    }
+    
+             
+    @staticmethod    
+    def split_dataset(data_dir, output_dir, val_ratio=0.2):
+        if not os.path.exists(output_dir):
+            os.makedirs(os.path.join(output_dir, "train"))
+            os.makedirs(os.path.join(output_dir, "val"))
+        profiles = os.listdir(data_dir)
+        profiles = [profile for profile in profiles if not profile.startswith(".")]
+        length = len(profiles)
+        n_val = int(length * val_ratio)
+
+        val_indices = set(random.sample(range(length), k=n_val))
+        train_indices = set(range(length)) - val_indices            
+        split_profiles = {"train": train_indices, "val": val_indices}
+        for phase, indices in split_profiles.items():
+            for _idx in indices:
+                profile = profiles[_idx]
+                img_folder = os.path.join(data_dir, profile)
+                for file_name in os.listdir(img_folder):
+                    _file_name, ext = os.path.splitext(file_name)
+                    if (
+                        _file_name not in MaskDataset._file_names
+                    ):  # "." 로 시작하는 파일 및 invalid 한 파일들은 무시합니다
+                        continue
+
+                    
+                    img_path = os.path.join(
+                        data_dir, profile, file_name
+                    )  
+                    
+                    if _file_name == "incorrect_mask":
+                        file_name = "incorrect.jpg"
+                        
+                    output_path = os.path.join(
+                        output_dir, phase, profile + '_' + file_name
+                    )
+                    
+                    shutil.copy(img_path, output_path)
+                        
+ 
+    @staticmethod
+    def get_index_files(split, task=None):
+        if split == "train":
+            return ("mask.train.index.jsonl", )
+        elif split == "val":
+            return ("mask.val.index.jsonl", )
+        elif split == "test":
+            return ("mask.val.index.jsonl", )
+        else:
+            raise RuntimeError("split %s is not found!" % split)
+
+    def __getitem__(self, index: int):
+        data = dict()
+        item = self.items[index]
+        img_path = item["image_path"]
+        img = self._get_image(img_path)
+        data["image"] = img
+        data["label"] = item["label"]
+        return data
+
+    @staticmethod
+    def _make_mask_index(data_path, index_path, data_path_prefix, split):
+        items = []
+        index_file = os.path.join(index_path, f"mask.{split}.index.jsonl")
+        for root, _, fnames in sorted(os.walk(data_path, followlinks=True)):
+            for fname in sorted(fnames):
+                path = os.path.join(root, fname)
+                path = path.replace(data_path_prefix, "")
+                
+                id, gender, race, age, mask = os.path.splitext(fname)[0].split("_")
+                gender_label = GenderLabels.from_str(gender)
+                age_label = AgeLabels.from_number(age)
+                mask_label = MaskLabels.from_str(mask)
+                class_index = mask_label * 6 + gender_label * 3 + age_label
+
+                items.append({
+                    "image_path": path,
+                    "label": class_index,
+                })
+
+        _write_data_into_jsonl(items, index_file)
+
+    @classmethod
+    def make_dataset_index(cls, train_data_path, val_data_path, index_path):
+        data_path_prefix = train_data_path[:[x[0]==x[1] for x in zip(train_data_path, val_data_path)].index(0)]
+        cls._make_mask_index(
+             data_path=train_data_path, index_path=index_path, data_path_prefix=data_path_prefix,
+             split="train",
+        )
+        cls._make_mask_index(
+             data_path=val_data_path, index_path=index_path, data_path_prefix=data_path_prefix,
+             split="val",
+        )
+        
+
+
+    
 class VQAv2Dataset(BaseDataset):
     def __init__(self, data_path, **kwargs):
         super().__init__(data_path=data_path, **kwargs)
@@ -706,6 +878,7 @@ task2dataset = {
     "coco_captioning": CaptioningDataset,
     "nocaps": CaptioningDataset,
     "imagenet": ImageNetDataset,
+    "mask": MaskDataset,
 }
 
 
