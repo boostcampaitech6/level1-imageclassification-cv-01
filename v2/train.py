@@ -149,7 +149,15 @@ def train(data_dir, model_dir, args):
     model = torch.nn.DataParallel(model)
         
     # -- loss & metric
-    criterion = create_criterion(args.criterion)  # default: cross_entropy
+    if args.age60_lw == 1:
+        criterion = create_criterion(args.criterion)  # default: cross_entropy
+    elif args.age60_lw > 1:
+        class_weights = torch.ones(18)
+        age60_cls = torch.arange(18)
+        class_weights[torch.where(age60_cls % 3 == 2)] = args.age60_lw
+        criterion = create_criterion(args.criterion, weight=class_weights.to(device))
+    else:
+        raise Exception('age60 loss를 줄여도 괜찮으시겠어요...?')
     opt_module = getattr(import_module("torch.optim"), args.optimizer)  # default: SGD
     optimizer = opt_module(
         filter(lambda p: p.requires_grad, model.parameters()),
@@ -476,6 +484,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--model_dir", type=str, default=os.environ.get("SM_MODEL_DIR", "../model")
+    )
+    parser.add_argument(
+        "--age60_lw", type=float, default=1.0, help="age60 loss weighted (default: 1.0)"
     )
 
     args = parser.parse_args()
