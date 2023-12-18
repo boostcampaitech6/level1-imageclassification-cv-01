@@ -19,6 +19,8 @@ from dataset import MaskBaseDataset
 from loss import create_criterion
 
 from accuracy_loss_print import AccuracyLoss
+from collections import OrderedDict
+
 
 
 def seed_everything(seed):
@@ -222,14 +224,21 @@ def train(data_dir, model_dir, args):
                     "Train/accuracy", train_acc, epoch * len(train_loader) + idx
                 )
 
-                for key, value in train_loss_dict.items():
-                    logger.add_scalar(
-                        "Train_cls/"+key, value, epoch * len(train_loader) + idx
-                    )
-                for key, value in train_acc_dict.items():
-                    logger.add_scalar(
-                        "Train_cls/"+key, value, epoch * len(train_loader) + idx
-                    )
+                # for key, value in train_loss_dict.items():
+                #     logger.add_scalar(
+                #         "Train_cls/"+key, value, epoch * len(train_loader) + idx
+                #     )
+                # for key, value in train_acc_dict.items():
+                #     logger.add_scalar(
+                #         "Train_cls/"+key, value, epoch * len(train_loader) + idx
+                #     )
+
+                logger.add_scalars('Train_cls/Mask Loss', dict(OrderedDict(list(train_loss_dict.items())[:3])), epoch * len(train_loader) + idx)
+                logger.add_scalars('Train_cls/Gender Loss', dict(OrderedDict(list(train_loss_dict.items())[3:5])), epoch * len(train_loader) + idx)
+                logger.add_scalars('Train_cls/Age Loss', dict(OrderedDict(list(train_loss_dict.items())[5:])), epoch * len(train_loader) + idx)
+                logger.add_scalars('Train_cls/Mask Accuracy', dict(OrderedDict(list(train_acc_dict.items())[:3])), epoch * len(train_loader) + idx)
+                logger.add_scalars('Train_cls/Gender Accuracy', dict(OrderedDict(list(train_acc_dict.items())[3:5])), epoch * len(train_loader) + idx)
+                logger.add_scalars('Train_cls/Age Accuracy', dict(OrderedDict(list(train_acc_dict.items())[5:])), epoch * len(train_loader) + idx)
 
                 loss_value = 0
                 matches = 0
@@ -277,7 +286,7 @@ def train(data_dir, model_dir, args):
                 val_acc_items.append(acc_item)
 
                 val_accloss = AccuracyLoss(labels, preds, outs, criterion)
-                val_loss_cls, val_acc_cls = val_accloss.loss_acc(len(val_loader), len(val_loader))
+                val_loss_cls, val_acc_cls = val_accloss.loss_acc(len(val_set), len(val_loader))
                 for key, value in val_loss_cls.items():
                     val_loss_dict[key] += value
                 for key, value in val_acc_cls.items():
@@ -341,10 +350,19 @@ def train(data_dir, model_dir, args):
             logger.add_scalar("Val/accuracy", val_acc, epoch)
             logger.add_figure("results", figure, epoch)
 
-            for key, value in val_loss_dict.items():
-                    logger.add_scalar("Val_cls/"+key, value, epoch)
-            for key, value in val_acc_dict.items():
-                logger.add_scalar("Val_cls/"+key, value, epoch)
+            # for key, value in val_loss_dict.items():
+            #         logger.add_scalar("Val_cls/"+key, value, epoch)
+            # for key, value in val_acc_dict.items():
+            #     logger.add_scalar("Val_cls/"+key, value, epoch)
+
+            logger.add_scalars('Val_cls/Mask Loss', dict(OrderedDict(list(val_loss_dict.items())[:3])), epoch * len(train_loader) + idx)
+            logger.add_scalars('Val_cls/Gender Loss', dict(OrderedDict(list(val_loss_dict.items())[3:5])), epoch * len(train_loader) + idx)
+            logger.add_scalars('Val_cls/Age Loss', dict(OrderedDict(list(val_loss_dict.items())[5:])), epoch * len(train_loader) + idx)
+            logger.add_scalars('Val_cls/Mask Accuracy', dict(OrderedDict(list(val_acc_dict.items())[:3])), epoch * len(train_loader) + idx)
+            logger.add_scalars('Val_cls/Gender Accuracy', dict(OrderedDict(list(val_acc_dict.items())[3:5])), epoch * len(train_loader) + idx)
+            logger.add_scalars('Val_cls/Age Accuracy', dict(OrderedDict(list(val_acc_dict.items())[5:])), epoch * len(train_loader) + idx)
+
+
             print()
 
     ################## 
