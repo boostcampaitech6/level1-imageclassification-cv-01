@@ -278,7 +278,7 @@ class BEiT3ForRetrieval(BEiT3Wrapper):
 def beit3_base_patch16_224_imageclassification(pretrained=False, **kwargs):
     args = _get_base_config(**kwargs)
     args.normalize_output = False
-    model = BEiT3ForImageClassification(args, num_classes=1000, **kwargs)
+    model = BEiT3ForImageClassification(args, num_classes=18, **kwargs)
     return model
 
 
@@ -286,7 +286,7 @@ def beit3_base_patch16_224_imageclassification(pretrained=False, **kwargs):
 def beit3_large_patch16_224_imageclassification(pretrained=False, **kwargs):
     args = _get_large_config(**kwargs)
     args.normalize_output = False
-    model = BEiT3ForImageClassification(args, num_classes=1000, **kwargs)
+    model = BEiT3ForImageClassification(args, num_classes=18, **kwargs)
     return model
 
 
