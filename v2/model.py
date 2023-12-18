@@ -94,12 +94,12 @@ class ConvNextModel(nn.Module):
 
 
         # Initializing a model (with random weights) from the convnext-tiny-224 style configuration
-        #self.convnext = torchvision.models.convnext_tiny(weights='IMAGENET1K_V1')
-        self.convnext = torchvision.models.convnext_small(weights='IMAGENET1K_V1')
+        self.convnext = torchvision.models.convnext_tiny(weights='IMAGENET1K_V1')
         self.convnext.classifier = nn.Sequential(
             nn.LayerNorm((768,1,1,), eps=1e-06, elementwise_affine=True),
             nn.Flatten(start_dim=1, end_dim=-1),
-            nn.Linear(in_features=768, out_features=num_classes, bias=True)
+            nn.Linear(in_features=768, out_features=1024, bias=True),
+            nn.Linear(in_features=1024, out_features=num_classes, bias=True)
         )
 
 
@@ -118,25 +118,19 @@ class ConvNextModel_3fc(nn.Module):
 
 
         # Initializing a model (with random weights) from the convnext-tiny-224 style configuration
-        #self.convnext = torchvision.models.convnext_tiny(weights='IMAGENET1K_V1')
-        self.convnext = torchvision.models.convnext_small(weights='IMAGENET1K_V1')
-        self.convnext.classifier = nn.Identity()
+        self.convnext = torchvision.models.convnext_tiny(weights='IMAGENET1K_V1')
+        self.convnext.classifier = nn.Sequential(
+            nn.LayerNorm((768,1,1,), eps=1e-06, elementwise_affine=True),
+            nn.Flatten(start_dim=1, end_dim=-1),
+            nn.Linear(in_features=768, out_features=1024, bias=True),
+            nn.Linear(in_features=1024, out_features=512, bias=True),
+            nn.Dropout(0.2),
+        )
         
-        self.classifier_age = nn.Sequential(
-            nn.LayerNorm((768,1,1,), eps=1e-06, elementwise_affine=True),
-            nn.Flatten(start_dim=1, end_dim=-1),
-            nn.Linear(in_features=768, out_features=3, bias=True)
-        )
-        self.classifier_mask = nn.Sequential(
-            nn.LayerNorm((768,1,1,), eps=1e-06, elementwise_affine=True),
-            nn.Flatten(start_dim=1, end_dim=-1),
-            nn.Linear(in_features=768, out_features=3, bias=True)
-        )
-        self.classifier_gender = nn.Sequential(
-            nn.LayerNorm((768,1,1,), eps=1e-06, elementwise_affine=True),
-            nn.Flatten(start_dim=1, end_dim=-1),
-            nn.Linear(in_features=768, out_features=2, bias=True)
-        )
+        self.classifier_age = nn.Linear(in_features=512, out_features=3, bias=True)
+        
+        self.classifier_mask = nn.Linear(in_features=512, out_features=3, bias=True)
+        self.classifier_gender = nn.Linear(in_features=512, out_features=2, bias=True)
 
 
     def forward(self, x):
@@ -174,4 +168,4 @@ class ConvNext_timm(nn.Module):
 
 # Print the model architecture
 #print(convnext_model.convnext)
-# print(convnext_model)
+# 
