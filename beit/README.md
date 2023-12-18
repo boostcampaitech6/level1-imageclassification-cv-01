@@ -31,35 +31,21 @@ Mask dataset 구조
 ```
 
 Profile 기준으로 Train data와 Validation data로 구분
-Imagenet을 이용한 finetuning과 같은 방식을 이용하기 위해 데이터 저장 형식을 아래와 같이 맞춘다
+Imagenet을 이용한 finetuning과 같은 방식을 이용하기 위해 데이터 저장 구조를 아래와 같이 맞춘다
+해당 구조는 torchvision의 [datasets.ImageFolder](https://pytorch.org/vision/main/generated/torchvision.datasets.ImageFolder.html)를 따른다
 
 ```
 /path/to/split_data/
   train/
-    profile1_incorrect.jpg
-    profile1_mask1.jpg
-    profile1_mask2.jpg
-    profile1_mask3.jpg
-    profile1_mask4.jpg
-    profile1_mask5.jpg
-    profile1_normal.jpg
-    profile2_incorrect.jpg
-    profile2_mask1.jpg
-    profile2_mask2.jpg
-    profile2_mask3.jpg
-    profile2_mask4.jpg
-    profile2_mask5.jpg
-    profile2_normal.jpg
+    class1/
+      img1.jpg
+    class2/
+      img2.jpg
   val/
-    profile3_incorrect.jpg
-    profile3_mask1.jpg
-    profile3_mask2.jpg
-    profile3_mask3.jpg
-    profile3_mask4.jpg
-    profile3_mask5.jpg
-    profile3_normal.jpg
-    profile3_incorrect.jpg
-
+    class1/
+      img3.jpg
+    class2/
+      img4.jpg
 ```
 아래 코드를 실행해서 위의 데이터를 구성한다
 
