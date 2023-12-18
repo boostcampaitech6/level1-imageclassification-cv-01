@@ -428,9 +428,10 @@ class MaskDataset(BaseDataset):
              
     @staticmethod    
     def split_dataset(data_dir, output_dir, val_ratio=0.2):
+        folders = [str(i) for i in range(18)]
         if not os.path.exists(output_dir):
-            os.makedirs(os.path.join(output_dir, "train"))
-            os.makedirs(os.path.join(output_dir, "val"))
+            [os.makedirs(os.path.join(output_dir, "train", folder)) for folder in folders]
+            [os.makedirs(os.path.join(output_dir, "val", folder)) for folder in folders]
         profiles = os.listdir(data_dir)
         profiles = [profile for profile in profiles if not profile.startswith(".")]
         length = len(profiles)
@@ -458,8 +459,16 @@ class MaskDataset(BaseDataset):
                     if _file_name == "incorrect_mask":
                         file_name = "incorrect.jpg"
                         
+                    file_name = profile + '_' + file_name
+                    
+                    id, gender, race, age, mask = os.path.splitext(file_name)[0].split("_")
+                    gender_label = GenderLabels.from_str(gender)
+                    age_label = AgeLabels.from_number(age)
+                    mask_label = MaskLabels.from_str(mask)
+                    class_index = mask_label * 6 + gender_label * 3 + age_label                    
+                       
                     output_path = os.path.join(
-                        output_dir, phase, profile + '_' + file_name
+                        output_dir, phase, str(class_index), profile + '_' + file_name
                     )
                     
                     shutil.copy(img_path, output_path)
