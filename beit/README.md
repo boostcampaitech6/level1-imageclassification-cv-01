@@ -97,6 +97,5 @@ python -m torch.distributed.launch --nproc_per_node=8 run_beit3_finetuning.py \
         --save_ckpt_freq 5 \
         --dist_eval \
         --mixup 0.8 \
-        --cutmix 1.0 \
-        --enable_deepspeed
+        --cutmix 1.0
 ```
