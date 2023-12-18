@@ -493,39 +493,54 @@ class MaskDataset(BaseDataset):
         data["image"] = img
         data["label"] = item["label"]
         return data
-
+    
     @staticmethod
-    def _make_mask_index(data_path, index_path, data_path_prefix, split):
+    def _find_classes(dir):
+        """
+        Finds the class folders in a dataset.
+        Args:
+            dir (string): Root directory path.
+        Returns:
+            tuple: (classes, class_to_idx) where classes are relative to (dir), and class_to_idx is a dictionary.
+        Ensures:
+            No class is a subdirectory of another.
+        """
+        classes = [d.name for d in os.scandir(dir) if d.is_dir()]
+        classes.sort()
+        class_to_idx = {cls_name: i for i, cls_name in enumerate(classes)}
+        return classes, class_to_idx
+    
+    @staticmethod
+    def _make_imagenet_index(data_path, index_path, data_path_prefix, class_to_idx, split):
         items = []
-        index_file = os.path.join(index_path, f"mask.{split}.index.jsonl")
-        for root, _, fnames in sorted(os.walk(data_path, followlinks=True)):
-            for fname in sorted(fnames):
-                path = os.path.join(root, fname)
-                path = path.replace(data_path_prefix, "")
-                
-                id, gender, race, age, mask = os.path.splitext(fname)[0].split("_")
-                gender_label = GenderLabels.from_str(gender)
-                age_label = AgeLabels.from_number(age)
-                mask_label = MaskLabels.from_str(mask)
-                class_index = mask_label * 6 + gender_label * 3 + age_label
-
-                items.append({
-                    "image_path": path,
-                    "label": class_index,
-                })
+        index_file = os.path.join(index_path, f"imagenet.{split}.index.jsonl")
+        for target_class in sorted(class_to_idx.keys()):
+            class_index = class_to_idx[target_class]
+            target_dir = os.path.join(data_path, target_class)
+            if not os.path.isdir(target_dir):
+                continue
+            for root, _, fnames in sorted(os.walk(target_dir, followlinks=True)):
+                for fname in sorted(fnames):
+                    path = os.path.join(root, fname)
+                    path = path.replace(data_path_prefix, "")
+                    items.append({
+                        "image_path": path,
+                        "label": class_index,
+                    })
 
         _write_data_into_jsonl(items, index_file)
 
     @classmethod
     def make_dataset_index(cls, train_data_path, val_data_path, index_path):
         data_path_prefix = train_data_path[:[x[0]==x[1] for x in zip(train_data_path, val_data_path)].index(0)]
-        cls._make_mask_index(
+        classes, class_to_idx = cls._find_classes(train_data_path)
+        cls._make_imagenet_index(
              data_path=train_data_path, index_path=index_path, data_path_prefix=data_path_prefix,
-             split="train",
+             class_to_idx=class_to_idx, split="train",
         )
-        cls._make_mask_index(
+        cls._make_imagenet_index(
              data_path=val_data_path, index_path=index_path, data_path_prefix=data_path_prefix,
-             split="val",
+             class_to_idx=class_to_idx, split="val",
         )
         
 
