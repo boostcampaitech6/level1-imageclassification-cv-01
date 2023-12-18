@@ -511,9 +511,9 @@ class MaskDataset(BaseDataset):
         return classes, class_to_idx
     
     @staticmethod
-    def _make_imagenet_index(data_path, index_path, data_path_prefix, class_to_idx, split):
+    def _make_mask_index(data_path, index_path, data_path_prefix, class_to_idx, split):
         items = []
-        index_file = os.path.join(index_path, f"imagenet.{split}.index.jsonl")
+        index_file = os.path.join(index_path, f"mask.{split}.index.jsonl")
         for target_class in sorted(class_to_idx.keys()):
             class_index = class_to_idx[target_class]
             target_dir = os.path.join(data_path, target_class)
@@ -534,11 +534,11 @@ class MaskDataset(BaseDataset):
     def make_dataset_index(cls, train_data_path, val_data_path, index_path):
         data_path_prefix = train_data_path[:[x[0]==x[1] for x in zip(train_data_path, val_data_path)].index(0)]
         classes, class_to_idx = cls._find_classes(train_data_path)
-        cls._make_imagenet_index(
+        cls._make_mask_index(
              data_path=train_data_path, index_path=index_path, data_path_prefix=data_path_prefix,
              class_to_idx=class_to_idx, split="train",
         )
-        cls._make_imagenet_index(
+        cls._make_mask_index(
              data_path=val_data_path, index_path=index_path, data_path_prefix=data_path_prefix,
              class_to_idx=class_to_idx, split="val",
         )
