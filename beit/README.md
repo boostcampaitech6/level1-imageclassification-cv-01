@@ -77,7 +77,7 @@ MaskDataset.make_dataset_index(
 마지막으로 아래 명령어를 통해 run_beit3_finetuning.py를 실행시켜 학습을 진행한다
 
 ```bash       
-python -m torch.distributed.launch --nproc_per_node=8 run_beit3_finetuning.py \
+python  run_beit3_finetuning.py \
         --model beit3_base_patch16_224 \
         --task mask \
         --batch_size 128 \
@@ -95,7 +95,6 @@ python -m torch.distributed.launch --nproc_per_node=8 run_beit3_finetuning.py \
         --weight_decay 0.05 \
         --seed 83 \
         --save_ckpt_freq 5 \
-        --dist_eval \
         --mixup 0.8 \
         --cutmix 1.0
 ```
