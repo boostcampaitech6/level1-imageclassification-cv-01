@@ -152,9 +152,9 @@ def train(data_dir, model_dir, args):
 
 
     # -- loss & metric
-    criterion_age = create_criterion(args.criterion)  # default: cross_entropy
-    criterion_mask = create_criterion(args.criterion)
-    criterion_gender = create_criterion(args.criterion)
+    criterion_age = create_criterion(args.criterion_age)  # default: cross_entropy
+    criterion_mask = create_criterion(args.criterion_mask)
+    criterion_gender = create_criterion(args.criterion_gender)
     opt_module = getattr(import_module("torch.optim"), args.optimizer)  # default: SGD
     optimizer_age = opt_module(
         filter(lambda p: p.requires_grad, model_age.parameters()),
@@ -400,10 +400,22 @@ if __name__ == "__main__":
         help="ratio for validaton (default: 0.2)",
     )
     parser.add_argument(
-        "--criterion",
+        "--criterion_age",
+        type=str,
+        default="f1",
+        help="criterion type for age(default: f1)",
+    )
+    parser.add_argument(
+        "--criterion_mask",
         type=str,
         default="cross_entropy",
-        help="criterion type (default: cross_entropy)",
+        help="criterion type for mask(default: f1)",
+    )
+    parser.add_argument(
+        "--criterion_gender",
+        type=str,
+        default="cross_entropy",
+        help="criterion type for gender(default: f1)",
     )
     parser.add_argument(
         "--lr_decay_step",

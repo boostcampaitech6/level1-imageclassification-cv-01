@@ -147,33 +147,19 @@ def train(data_dir, model_dir, args):
     model = torch.nn.DataParallel(model)
         
     # -- loss & metric
-    criterion_age = create_criterion(args.criterion)  # default: cross_entropy
-    criterion_mask = create_criterion(args.criterion)
-    criterion_gender = create_criterion(args.criterion)
+    criterion_age = create_criterion(args.criterion_age)  # default: cross_entropy
+    criterion_mask = create_criterion(args.criterion_mask)
+    criterion_gender = create_criterion(args.criterion_gender)
     
-    opt_module_age = getattr(import_module("torch.optim"), args.optimizer)  # default: SGD
-    opt_module_mask = getattr(import_module("torch.optim"), args.optimizer)  # default: SGD
-    opt_module_gender = getattr(import_module("torch.optim"), args.optimizer)  # default: SGD
-    optimizer_age = opt_module_age(
-        filter(lambda p: p.requires_grad, model.parameters()),
-        lr=args.lr,
-        weight_decay=5e-4,
-    )
-    optimizer_mask = opt_module_mask(
-        filter(lambda p: p.requires_grad, model.parameters()),
-        lr=args.lr,
-        weight_decay=5e-4,
-    )
-    optimizer_gender = opt_module_gender(
+    opt_module = getattr(import_module("torch.optim"), args.optimizer)  # default: SGD
+    optimizer = opt_module(
         filter(lambda p: p.requires_grad, model.parameters()),
         lr=args.lr,
         weight_decay=5e-4,
     )
         
     
-    scheduler_age = StepLR(optimizer_age, args.lr_decay_step, gamma=0.5)
-    scheduler_mask = StepLR(optimizer_mask, args.lr_decay_step, gamma=0.5)
-    scheduler_gender = StepLR(optimizer_gender, args.lr_decay_step, gamma=0.5)
+    scheduler = StepLR(optimizer, args.lr_decay_step, gamma=0.5)
 
     # -- logging
     logger = SummaryWriter(log_dir=save_dir)
@@ -189,9 +175,7 @@ def train(data_dir, model_dir, args):
     if args.resume_from:
         model_data = torch.load(args.resume_from)
         model.load_state_dict(model_data['model_state_dict'])
-        optimizer_age.load_state_dict(model_data['optimizer_age_state_dict'])
-        optimizer_mask.load_state_dict(model_data['optimizer_mask_state_dict'])
-        optimizer_gender.load_state_dict(model_data['optimizer_gender_state_dict'])
+        optimizer.load_state_dict(model_data['optimizer_state_dict'])
         start_epoch = model_data['epoch'] + 1
     
     torch.autograd.set_detect_anomaly(True)
@@ -210,9 +194,9 @@ def train(data_dir, model_dir, args):
             inputs = inputs.to(device)
             age_label,mask_label,gender_label = torch.tensor(age_label).to(device),torch.tensor(mask_label).to(device),torch.tensor(gender_label).to(device)
 
-            optimizer_age.zero_grad()
-            optimizer_mask.zero_grad()
-            optimizer_gender.zero_grad()
+            optimizer.zero_grad()
+
+
 
             outs_age,outs_mask,outs_gender = model(inputs)
             preds_age,preds_mask,preds_gender = torch.argmax(outs_age, dim=-1),torch.argmax(outs_mask, dim=-1),torch.argmax(outs_gender, dim=-1)
@@ -220,16 +204,14 @@ def train(data_dir, model_dir, args):
             loss_age = criterion_age(outs_age, age_label)
             loss_mask = criterion_mask(outs_mask, mask_label)
             loss_gender = criterion_gender(outs_gender, gender_label)
-            #loss = loss_mask + loss_age + loss_gender
+            loss = loss_mask + loss_age + loss_gender
+            
 
-            loss_age.backward(retain_graph=True)
-            optimizer_age.step()
             
-            loss_mask.backward(retain_graph=True)
-            optimizer_mask.step()
+            loss.backward()
+            optimizer.step()
             
-            loss_gender.backward(retain_graph=True)
-            optimizer_gender.step()
+            
             
             loss_val_age += loss_age.item()
             loss_val_mask += loss_mask.item()
@@ -241,15 +223,13 @@ def train(data_dir, model_dir, args):
                 train_loss_mask = loss_val_mask / args.log_interval
                 train_loss_gender = loss_val_gender / args.log_interval
                 train_acc = matches / args.batch_size / args.log_interval
-                current_lr_age = get_lr(optimizer_age)
-                current_lr_mask = get_lr(optimizer_mask)
-                current_lr_gender = get_lr(optimizer_gender)
+                current_lr = get_lr(optimizer)
                 
 
                 print(
                     f"Epoch[{epoch}/{args.epochs}]({idx + 1}/{len(train_loader)}) || "
-                    f"training age loss {train_loss_age:4.4} ||training mask loss {train_loss_mask:4.4} || training gender loss {train_loss_gender:4.4} || training accuracy {train_acc:4.2%}"
-                    f"Current age lr {current_lr_age} ||Current mask lr {current_lr_mask} || Current gender lr {current_lr_gender} "
+                    f"training age loss {train_loss_age:4.4} ||training mask loss {train_loss_mask:4.4} || training gender loss {train_loss_gender:4.4} || training accuracy {train_acc:4.2%} ||"
+                    f"Current age lr {current_lr} "
                 )
                 logger.add_scalar(
                     "Train/loss", train_loss_age, epoch * len(train_loader) + idx
@@ -263,9 +243,7 @@ def train(data_dir, model_dir, args):
                 loss_val_gender=0
                 matches = 0
 
-        scheduler_age.step()
-        scheduler_mask.step()
-        scheduler_gender.step()
+        scheduler.step()
 
         # val loop
         with torch.no_grad():
@@ -328,9 +306,7 @@ def train(data_dir, model_dir, args):
                     {
                         'epoch': epoch,
                         'model_state_dict': model.module.state_dict(),
-                        'optimizer_age_state_dict': optimizer_age.state_dict(),
-                        'optimizer_mask_state_dict': optimizer_mask.state_dict(),
-                        'optimizer_gender_state_dict': optimizer_gender.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
                         'accuracy': val_acc,
                     }
                     , f"{save_dir}/best.pth")
@@ -339,9 +315,7 @@ def train(data_dir, model_dir, args):
                     {
                         'epoch': epoch,
                         'model_state_dict': model.module.state_dict(),
-                        'optimizer_age_state_dict': optimizer_age.state_dict(),
-                        'optimizer_mask_state_dict': optimizer_mask.state_dict(),
-                        'optimizer_gender_state_dict': optimizer_gender.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
                         'accuracy': val_acc,
                     }
                     , f"{save_dir}/last.pth")
@@ -420,10 +394,22 @@ if __name__ == "__main__":
         help="ratio for validaton (default: 0.2)",
     )
     parser.add_argument(
-        "--criterion",
+        "--criterion_age",
+        type=str,
+        default="f1",
+        help="criterion type for age(default: f1)",
+    )
+    parser.add_argument(
+        "--criterion_mask",
         type=str,
         default="cross_entropy",
-        help="criterion type (default: cross_entropy)",
+        help="criterion type for mask(default: f1)",
+    )
+    parser.add_argument(
+        "--criterion_gender",
+        type=str,
+        default="cross_entropy",
+        help="criterion type for gender(default: f1)",
     )
     parser.add_argument(
         "--lr_decay_step",
