@@ -36,7 +36,7 @@ def get_args():
     parser.add_argument('--model', default='beit_base_patch16_224', type=str, metavar='MODEL',
                         help='Name of model to train')
     parser.add_argument('--task', type=str, required=True, 
-                        choices=['nlvr2', 'vqav2', 'flickr30k', 'coco_retrieval', 'coco_captioning', 'nocaps', 'imagenet'], 
+                        choices=['nlvr2', 'vqav2', 'flickr30k', 'coco_retrieval', 'coco_captioning', 'nocaps', 'imagenet','mask'], 
                         help='Name of task to fine-tuning')
 
     parser.add_argument('--input_size', default=224, type=int,
@@ -145,7 +145,7 @@ def get_args():
     parser.add_argument('--task_cache_path', default=None, type=str)
 
     # parameter for imagenet finetuning
-    parser.add_argument('--nb_classes', default=1000, type=int,
+    parser.add_argument('--nb_classes', default=18, type=int,
                         help='number of the classification types')
     parser.add_argument('--mixup', type=float, default=0,
                         help='mixup alpha, mixup enabled if > 0.')
@@ -248,7 +248,7 @@ def main(args, ds_init):
             model_config = "%s_retrieval" % args.model
         elif args.task in ("coco_captioning", "nocaps"):
             model_config = "%s_captioning" % args.model
-        elif args.task in ("imagenet"):
+        elif args.task in ("imagenet", "mask"):
             model_config = "%s_imageclassification" % args.model
         else:
             model_config = "%s_%s" % (args.model, args.task)
@@ -345,7 +345,7 @@ def main(args, ds_init):
 
     # mixup for imagenet
     mixup_fn = None
-    if args.task in ["imagenet", "in1k"]:
+    if args.task in ["imagenet", "in1k", "mask"]:
         mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
         if mixup_active:
             print("Mixup is activated!")
@@ -356,7 +356,7 @@ def main(args, ds_init):
 
     if args.eval:
         data_loader_test = create_downstream_dataset(args, is_eval=True)
-        if args.task in ["nlvr2", "flickr30k", "coco_retrieval", "imagenet"]:
+        if args.task in ["nlvr2", "flickr30k", "coco_retrieval", "imagenet","mask"]:
             ext_test_stats, task_key = evaluate(data_loader_test, model, device, task_handler)
             print(f"Accuracy of the network on the {len(data_loader_test.dataset)} test images: {ext_test_stats[task_key]:.3f}%")
             exit(0)
