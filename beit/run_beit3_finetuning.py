@@ -414,7 +414,7 @@ def main(args, ds_init):
                 if args.output_dir and args.save_ckpt:
                     utils.save_model(
                         args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
-                        loss_scaler=loss_scaler, epoch="best", model_ema=model_ema)
+                        loss_scaler=loss_scaler, epoch=f"best_{epoch}", model_ema=model_ema)
 
             print(f'Max performance: {max_accuracy:.2f}%')
             if log_writer is not None:
