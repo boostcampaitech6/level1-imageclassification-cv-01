@@ -170,6 +170,9 @@ def train(data_dir, model_dir, args):
     best_val_loss = np.inf
     best_epoch = 0 
     
+    best_val_age_acc = 0
+    best_epoch_age = 0
+    
     start_epoch = 0
     
     if args.resume_from:
@@ -253,6 +256,7 @@ def train(data_dir, model_dir, args):
             val_loss_items_mask = []
             val_loss_items_gender = []
             val_acc_items = []
+            val_acc_items_age = []
             figure = None
             for val_batch in val_loader:
                 inputs, labels = val_batch
@@ -267,10 +271,16 @@ def train(data_dir, model_dir, args):
                 loss_item_age, loss_item_mask, loss_item_gender = criterion_age(outs_age, age_label).item(),criterion_mask(outs_mask, mask_label).item(),criterion_gender(outs_gender, gender_label).item()
                 acc=(age_label==preds_age) & (mask_label==preds_mask) & (gender_label==preds_gender)
                 acc_item = acc.sum().item()
+                acc_age=(age_label==preds_age)
+                acc_item_age=acc_age.sum().item()
+                
                 val_loss_items_age.append(loss_item_age)
                 val_loss_items_mask.append(loss_item_mask)
                 val_loss_items_gender.append(loss_item_gender)
                 val_acc_items.append(acc_item)
+                val_acc_items_age.append(acc_item_age)
+                
+                
 
                 preds=MaskBaseDataset.encode_multi_class(preds_mask,preds_gender,preds_age)
 
@@ -296,6 +306,7 @@ def train(data_dir, model_dir, args):
             val_loss = loss_mask + loss_age + loss_gender
             
             val_acc = np.sum(val_acc_items) / len(val_set)
+            val_acc_age = np.sum(val_acc_items_age) / len(val_set)
             best_val_loss = min(best_val_loss, (val_loss_age+val_loss_mask+val_loss_gender)/3)
             if val_acc > best_val_acc:
                 best_epoch = epoch
@@ -311,6 +322,17 @@ def train(data_dir, model_dir, args):
                     }
                     , f"{save_dir}/best.pth")
                 best_val_acc = val_acc
+            if val_acc_age > best_val_age_acc:
+                best_epoch_age = epoch
+                torch.save(
+                    {
+                        'epoch': epoch,
+                        'model_state_dict': model.module.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'accuracy': val_acc,
+                    }
+                    , f"{save_dir}/best_age.pth")
+                best_val_age_acc = val_acc_age
             torch.save(
                     {
                         'epoch': epoch,
@@ -332,6 +354,7 @@ def train(data_dir, model_dir, args):
     ################## 
     os.rename(f"{save_dir}/best.pth",f"{save_dir}/best_epoch{best_epoch:03d}.pth")
     os.rename(f"{save_dir}/last.pth",f"{save_dir}/last_epoch{args.epochs-1:03d}.pth")
+    os.rename(f"{save_dir}/best_age.pth",f"{save_dir}/best_age_epoch{best_epoch_age:03d}.pth")
     ##################
 
 if __name__ == "__main__":
