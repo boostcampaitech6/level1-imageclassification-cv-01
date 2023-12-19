@@ -17,11 +17,20 @@ from torchvision.datasets.folder import default_loader
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.data.transforms import RandomResizedCropAndInterpolation
 from timm.data import create_transform
-
+from torch.utils.data import Dataset
 import utils
 from glossary import normalize_word
 from randaug import RandomAugment
 from enum import Enum
+from PIL import Image
+from torchvision.transforms import (
+    Resize,
+    ToTensor,
+    Normalize,
+    Compose,
+    CenterCrop,
+    ColorJitter,
+)
 
 class BaseDataset(torch.utils.data.Dataset):
     def __init__(
@@ -1042,3 +1051,30 @@ def create_downstream_dataset(args, is_eval=False):
         return \
             create_dataset_by_split(args, split="train", is_train=True), \
             create_dataset_by_split(args, split="val", is_train=True)
+            
+class TestDataset(Dataset):
+    """테스트 데이터셋 클래스"""
+
+    def __init__(
+        self, img_paths, resize, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246)
+    ):
+        self.img_paths = img_paths
+        self.transform = Compose(
+            [
+                Resize(resize, Image.BILINEAR),
+                ToTensor(),
+                Normalize(mean=mean, std=std),
+            ]
+        )
+
+    def __getitem__(self, index):
+        """인덱스에 해당하는 데이터를 가져오는 메서드"""
+        image = Image.open(self.img_paths[index])
+
+        if self.transform:
+            image = self.transform(image)
+        return image
+
+    def __len__(self):
+        """데이터셋의 길이를 반환하는 메서드"""
+        return len(self.img_paths)
