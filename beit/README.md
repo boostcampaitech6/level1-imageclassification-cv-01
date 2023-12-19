@@ -98,3 +98,14 @@ python  run_beit3_finetuning.py \
         --mixup 0.8 \
         --cutmix 1.0
 ```
+
+
+# Interference
+```
+python inference.py \
+          --model beit3_base_patch16_224_imageclassification \
+          --resize 224 224 \
+          --data_dir /path/to/data/eval \
+          --output_dir /path/to/output \
+          --model_dir /path/to/model.pth
+```
