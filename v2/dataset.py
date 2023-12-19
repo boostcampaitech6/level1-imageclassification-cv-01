@@ -299,6 +299,10 @@ class MaskBaseDataset(Dataset):
     def encode_multi_class(mask_label, gender_label, age_label) -> int:
         """다중 라벨을 하나의 클래스로 인코딩하는 메서드"""
         return mask_label * 6 + gender_label * 3 + age_label
+    
+    @staticmethod
+    def encode_mask_gender(mask_label, gender_label) -> int:
+        return mask_label * 2 + gender_label
 
     @staticmethod
     def decode_multi_class(
