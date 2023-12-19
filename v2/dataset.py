@@ -373,6 +373,8 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
                     mask_label = self._file_names[_file_name]
 
                     id, gender, race, age = profile.split("_")
+                    if(phase=="train" and age in ["57","58","59"]):
+                        continue
                     gender_label = GenderLabels.from_str(gender)
                     age_label = AgeLabels.from_number(age)
 
