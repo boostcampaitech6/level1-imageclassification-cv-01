@@ -27,7 +27,7 @@ class FocalLoss(nn.Module):
 # Label Smoothing Loss 구현
 # 모델이 너무 자신만만하게 예측하는 것을 방지하기 위해 사용된다.
 class LabelSmoothingLoss(nn.Module):
-    def __init__(self, classes=3, smoothing=0.0, dim=-1):
+    def __init__(self, classes=18, smoothing=0.0, dim=-1):
         super(LabelSmoothingLoss, self).__init__()
         self.confidence = 1.0 - smoothing
         self.smoothing = smoothing
@@ -35,6 +35,9 @@ class LabelSmoothingLoss(nn.Module):
         self.dim = dim
 
     def forward(self, pred, target):
+        if pred.ndim == 1:
+            pred = pred.unsqueeze(0)
+            target = target.unsqueeze(0)
         pred = pred.log_softmax(dim=self.dim)
         with torch.no_grad():
             true_dist = torch.zeros_like(pred)
@@ -47,12 +50,15 @@ class LabelSmoothingLoss(nn.Module):
 # F1 Score는 precision과 recall의 조화 평균이며, 이를 손실로 사용한다.
 # https://gist.github.com/SuperShinyEyes/dcc68a08ff8b615442e3bc6a9b55a354
 class F1Loss(nn.Module):
-    def __init__(self, classes=3, epsilon=1e-7):
+    def __init__(self, classes=18, epsilon=1e-7):
         super().__init__()
         self.classes = classes
         self.epsilon = epsilon
 
     def forward(self, y_pred, y_true):
+        if(y_pred.ndim==1):
+            y_pred=y_pred.unsqueeze(0)
+            y_true=y_true.unsqueeze(0)
         assert y_pred.ndim == 2
         assert y_true.ndim == 1
         y_true = F.one_hot(y_true, self.classes).to(torch.float32)
