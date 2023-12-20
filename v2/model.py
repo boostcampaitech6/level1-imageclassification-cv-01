@@ -99,7 +99,9 @@ class ConvNextModel(nn.Module):
             nn.LayerNorm((768,1,1,), eps=1e-06, elementwise_affine=True),
             nn.Flatten(start_dim=1, end_dim=-1),
             # nn.Linear(in_features=768, out_features=1024, bias=True),
-            #nn.Linear(in_features=1024, out_features=num_classes, bias=True)
+            # nn.BatchNorm1d(1024),s
+            # nn.Dropout(p=0.2),
+            # nn.Linear(in_features=1024, out_features=num_classes, bias=True)
             nn.Linear(in_features=768, out_features=num_classes, bias=True)
         )
 
