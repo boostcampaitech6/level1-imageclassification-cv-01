@@ -158,7 +158,6 @@ def train(data_dir, model_dir, args):
     model = torch.nn.DataParallel(model)
         
     # -- loss & metric
-    criterion = create_criterion(args.criterion)  # default: cross_entropy
     mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
     if mixup_active:
         # smoothing is handled with mixup label transform
@@ -166,7 +165,7 @@ def train(data_dir, model_dir, args):
     elif args.label_smoothing > 0.:
         criterion = LabelSmoothingCrossEntropy(smoothing=args.label_smoothing)
     else:
-        criterion = torch.nn.CrossEntropyLoss()
+        criterion = create_criterion(args.criterion)
     opt_module = getattr(import_module("torch.optim"), args.optimizer)  # default: SGD
     optimizer = opt_module(
         filter(lambda p: p.requires_grad, model.parameters()),
@@ -285,6 +284,7 @@ def train(data_dir, model_dir, args):
             val_loss_items = []
             val_acc_items = []
             figure = None
+            
             val_loss_dict = {
                 'mask_wear_loss' : 0,
                 'mask_incorrect_loss' : 0,
@@ -312,7 +312,7 @@ def train(data_dir, model_dir, args):
 
                 outs = model(inputs)
                 preds = torch.argmax(outs, dim=-1)
-                
+                criterion = create_criterion(args.criterion)
                 loss_item = criterion(outs, labels).item()
                 acc_item = (labels == preds).sum().item()
                 val_loss_items.append(loss_item)
