@@ -44,11 +44,11 @@ def voting(file_dir, csv1, csv2, csv3, save_dir):
 
 if __name__ == "__main__":
     """
-    csv 경로 : file_dir
-    1등 : csv1
-    2등 : csv2
-    3등 : csv3
-    저장 경로 : save_dir
+    file_dir : csv 경로
+    csv1 : csv 파일 이름(1등)
+    csv2 : csv 파일 이름(2등)
+    csv3 : csv 파일 이름(3등)
+    save_dir : 저장할 경로
     """
 
     parser = argparse.ArgumentParser()
