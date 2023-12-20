@@ -8,6 +8,7 @@ import re
 from importlib import import_module
 from pathlib import Path
 from timm.data.mixup import Mixup
+from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -109,7 +110,6 @@ def train(data_dir, model_dir, args):
         data_dir=data_dir,
     )
     num_classes = dataset.num_classes  # 18
-
     # -- augmentation
     transform_module = getattr(
         import_module("dataset"), args.augmentation
@@ -130,6 +130,7 @@ def train(data_dir, model_dir, args):
                 mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
                 prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
                 label_smoothing=args.label_smoothing, num_classes=num_classes)
+        print(num_classes)
 
     # -- data_loader
     train_set, val_set = dataset.split_dataset()
@@ -159,6 +160,14 @@ def train(data_dir, model_dir, args):
         
     # -- loss & metric
     criterion = create_criterion(args.criterion)  # default: cross_entropy
+    mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
+    if mixup_active:
+        # smoothing is handled with mixup label transform
+        criterion = SoftTargetCrossEntropy()
+    elif args.label_smoothing > 0.:
+        criterion = LabelSmoothingCrossEntropy(smoothing=args.label_smoothing)
+    else:
+        criterion = torch.nn.CrossEntropyLoss()
     opt_module = getattr(import_module("torch.optim"), args.optimizer)  # default: SGD
     optimizer = opt_module(
         filter(lambda p: p.requires_grad, model.parameters()),
@@ -199,11 +208,13 @@ def train(data_dir, model_dir, args):
         for idx, train_batch in enumerate(train_loader):
             inputs, labels = train_batch
             
-            if mixup_fn is not None:
-                inputs, labels = mixup_fn(inputs, labels)
+
                 
             inputs = inputs.to(device)
             labels = labels.to(device)
+            
+            if mixup_fn is not None:
+                inputs, labels = mixup_fn(inputs, labels)
 
             optimizer.zero_grad()
 
@@ -216,6 +227,8 @@ def train(data_dir, model_dir, args):
             optimizer.step()
             
             loss_value += loss.item()
+            print("preds: ", preds)
+            print("labels: ", labels)
             matches += (preds == labels).sum().item()
             train_accloss = AccuracyLoss(labels, preds, outs, criterion)
             if (idx + 1) % args.log_interval == 0:
