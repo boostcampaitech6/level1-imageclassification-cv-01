@@ -71,7 +71,7 @@ class BaseAugmentation:
         """
         이미지에 저장된 transform 적용
 
-        Args:8
+        Args:
             Image (PIL.Image): Augumentation을 적용할 이미지
 
         Returns:
@@ -373,6 +373,8 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
                     mask_label = self._file_names[_file_name]
 
                     id, gender, race, age = profile.split("_")
+                    if(phase=="train" and age in ["57","58","59"]):
+                        continue
                     gender_label = GenderLabels.from_str(gender)
                     age_label = AgeLabels.from_number(age)
 

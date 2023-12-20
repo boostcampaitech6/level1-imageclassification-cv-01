@@ -18,7 +18,11 @@ from torch.utils.tensorboard import SummaryWriter
 from dataset import MaskBaseDataset
 from loss import create_criterion
 
+from accuracy_loss_print import AccuracyLoss
+from collections import OrderedDict
+
 from model import VITmodel # VIT추가
+
 
 
 def seed_everything(seed):
@@ -145,7 +149,7 @@ def train(data_dir, model_dir, args):
     model_module = getattr(import_module("model"), args.model)  # default: BaseModel
     model = model_module(num_classes=num_classes).to(device)
     model = torch.nn.DataParallel(model)
-
+        
     # -- loss & metric
     criterion = create_criterion(args.criterion)  # default: cross_entropy
     opt_module = getattr(import_module("torch.optim"), args.optimizer)  # default: SGD
@@ -154,6 +158,8 @@ def train(data_dir, model_dir, args):
         lr=args.lr,
         weight_decay=5e-4,
     )
+        
+    
     scheduler = StepLR(optimizer, args.lr_decay_step, gamma=0.5)
 
     # -- logging
@@ -163,7 +169,21 @@ def train(data_dir, model_dir, args):
 
     best_val_acc = 0
     best_val_loss = np.inf
-    for epoch in range(args.epochs):
+    best_epoch = 0 
+
+    best_val_age60_acc = 0
+    best_epoch_age60 = 0
+    
+    start_epoch = 0
+    
+    if args.resume_from:
+        model_data = torch.load(args.resume_from)
+        model.load_state_dict(model_data['model_state_dict'])
+        optimizer.load_state_dict(model_data['optimizer_state_dict'])
+        start_epoch = model_data['epoch'] + 1
+    
+    
+    for epoch in range(start_epoch, args.epochs):
         # train loop
         model.train()
         loss_value = 0
@@ -177,27 +197,53 @@ def train(data_dir, model_dir, args):
 
             outs = model(inputs)
             preds = torch.argmax(outs, dim=-1)
+
             loss = criterion(outs, labels)
 
             loss.backward()
             optimizer.step()
-
+            
             loss_value += loss.item()
             matches += (preds == labels).sum().item()
+            train_accloss = AccuracyLoss(labels, preds, outs, criterion)
             if (idx + 1) % args.log_interval == 0:
                 train_loss = loss_value / args.log_interval
                 train_acc = matches / args.batch_size / args.log_interval
                 current_lr = get_lr(optimizer)
+                train_loss_dict, train_acc_dict = train_accloss.loss_acc(args.log_interval, 1)
+
                 print(
                     f"Epoch[{epoch}/{args.epochs}]({idx + 1}/{len(train_loader)}) || "
-                    f"training loss {train_loss:4.4} || training accuracy {train_acc:4.2%} || lr {current_lr}"
+                    f"training total loss {train_loss:4.4} || training total accuracy {train_acc:4.2%} || lr {current_lr}"
                 )
+                print(
+                    f"training mask loss {train_loss_dict['mask_wear_loss']:4.4}, {train_loss_dict['mask_incorrect_loss']:4.4}, {train_loss_dict['mask_not_wear_loss']:4.4} || training mask accuracy {train_acc_dict['mask_wear_acc']:4.4%}, {train_acc_dict['mask_incorrect_acc']:4.4%}, {train_acc_dict['mask_not_wear_acc']:4.4%}\n"
+                    f"training gender loss {train_loss_dict['male_loss']:4.4}, {train_loss_dict['female_loss']:4.4} || training gender accuracy {train_acc_dict['mask_not_wear_acc']:4.4%}, {train_acc_dict['female_acc'] :4.4%}\n"
+                    f"training age loss {train_loss_dict['age_0_30_loss']:4.4}, {train_loss_dict['age_30_60_loss']:4.4}, {train_loss_dict['age_60_loss']:4.4} || training age accuracy {train_acc_dict['age_0_30_acc']:4.4%}, {train_acc_dict['age_30_60_acc']:4.4%}, {train_acc_dict['age_60_acc']:4.4%}\n"
+                )
+
                 logger.add_scalar(
                     "Train/loss", train_loss, epoch * len(train_loader) + idx
                 )
                 logger.add_scalar(
                     "Train/accuracy", train_acc, epoch * len(train_loader) + idx
                 )
+
+                # for key, value in train_loss_dict.items():
+                #     logger.add_scalar(
+                #         "Train_cls/"+key, value, epoch * len(train_loader) + idx
+                #     )
+                # for key, value in train_acc_dict.items():
+                #     logger.add_scalar(
+                #         "Train_cls/"+key, value, epoch * len(train_loader) + idx
+                #     )
+
+                logger.add_scalars('Train_cls/Mask Loss', dict(OrderedDict(list(train_loss_dict.items())[:3])), epoch * len(train_loader) + idx)
+                logger.add_scalars('Train_cls/Gender Loss', dict(OrderedDict(list(train_loss_dict.items())[3:5])), epoch * len(train_loader) + idx)
+                logger.add_scalars('Train_cls/Age Loss', dict(OrderedDict(list(train_loss_dict.items())[5:])), epoch * len(train_loader) + idx)
+                logger.add_scalars('Train_cls/Mask Accuracy', dict(OrderedDict(list(train_acc_dict.items())[:3])), epoch * len(train_loader) + idx)
+                logger.add_scalars('Train_cls/Gender Accuracy', dict(OrderedDict(list(train_acc_dict.items())[3:5])), epoch * len(train_loader) + idx)
+                logger.add_scalars('Train_cls/Age Accuracy', dict(OrderedDict(list(train_acc_dict.items())[5:])), epoch * len(train_loader) + idx)
 
                 loss_value = 0
                 matches = 0
@@ -211,6 +257,26 @@ def train(data_dir, model_dir, args):
             val_loss_items = []
             val_acc_items = []
             figure = None
+            val_loss_dict = {
+                'mask_wear_loss' : 0,
+                'mask_incorrect_loss' : 0,
+                'mask_not_wear_loss' : 0,
+                'male_loss' : 0,
+                'female_loss' : 0,
+                'age_0_30_loss' : 0,
+                'age_30_60_loss' : 0,
+                'age_60_loss' : 0,
+            }
+            val_acc_dict = {
+                'mask_wear_acc' : 0,
+                'mask_incorrect_acc' : 0,
+                'mask_not_wear_acc' : 0,
+                'male_acc' : 0,
+                'female_acc' : 0,
+                'age_0_30_acc' : 0,
+                'age_30_60_acc' : 0,
+                'age_60_acc' : 0,
+            }
             for val_batch in val_loader:
                 inputs, labels = val_batch
                 inputs = inputs.to(device)
@@ -218,11 +284,18 @@ def train(data_dir, model_dir, args):
 
                 outs = model(inputs)
                 preds = torch.argmax(outs, dim=-1)
-
+                
                 loss_item = criterion(outs, labels).item()
                 acc_item = (labels == preds).sum().item()
                 val_loss_items.append(loss_item)
                 val_acc_items.append(acc_item)
+
+                val_accloss = AccuracyLoss(labels, preds, outs, criterion)
+                val_loss_cls, val_acc_cls = val_accloss.loss_acc(len(val_set), len(val_loader))
+                for key, value in val_loss_cls.items():
+                    val_loss_dict[key] += value
+                for key, value in val_acc_cls.items():
+                    val_acc_dict[key] += value
 
                 if figure is None:
                     inputs_np = (
@@ -243,49 +316,97 @@ def train(data_dir, model_dir, args):
             val_acc = np.sum(val_acc_items) / len(val_set)
             best_val_loss = min(best_val_loss, val_loss)
             if val_acc > best_val_acc:
+                best_epoch = epoch
                 print(
                     f"New best model for val accuracy : {val_acc:4.2%}! saving the best model.."
                 )
-                torch.save(model.module.state_dict(), f"{save_dir}/best.pth")
+                torch.save(
+                    {
+                        'epoch': epoch,
+                        'model_state_dict': model.module.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'loss': val_loss,
+                        'accuracy': val_acc,
+                    }
+                    , f"{save_dir}/best.pth")
                 best_val_acc = val_acc
-            torch.save(model.module.state_dict(), f"{save_dir}/last.pth")
+            torch.save(
+                    {
+                        'epoch': epoch,
+                        'model_state_dict': model.module.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'loss': val_loss,
+                        'accuracy': val_acc,
+                    }
+                    , f"{save_dir}/last.pth")
+            
+            if val_acc_dict['age_60_acc'] > best_val_age60_acc:
+                best_epoch_age60 = epoch
+                best_val_age60_acc = val_acc_dict['age_60_acc']
+                torch.save(
+                    {
+                        'epoch': epoch,
+                        'model_state_dict': model.module.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'loss': val_loss,
+                        'accuracy': val_acc,
+                    }
+                    , f"{save_dir}/best_age60.pth")
+
+
             print(
                 f"[Val] acc : {val_acc:4.2%}, loss: {val_loss:4.2} || "
                 f"best acc : {best_val_acc:4.2%}, best loss: {best_val_loss:4.2}"
             )
+            print(
+                f"[Val] mask loss {val_loss_dict['mask_wear_loss']:4.2}, {val_loss_dict['mask_incorrect_loss']:4.2}, {val_loss_dict['mask_not_wear_loss']:4.4} || training mask accuracy {val_acc_dict['mask_wear_acc']:4.2%}, {val_acc_dict['mask_incorrect_acc']:4.2%}, {val_acc_dict['mask_not_wear_acc']:4.2%}\n"
+                f"[Val] gender loss {val_loss_dict['male_loss']:4.2}, {val_loss_dict['female_loss']:4.2} || training gender accuracy {val_acc_dict['mask_not_wear_acc']:4.2%}, {val_acc_dict['female_acc']:4.2%}\n"
+                f"[Val] age loss {val_loss_dict['age_0_30_loss']:4.2}, {val_loss_dict['age_30_60_loss']:4.2}, {val_loss_dict['age_60_loss']:4.2} || training age accuracy {val_acc_dict['age_0_30_acc']:4.2%}, {val_acc_dict['age_30_60_acc']:4.2%}, {val_acc_dict['age_60_acc']:4.2%}\n"
+            )
+            
             logger.add_scalar("Val/loss", val_loss, epoch)
             logger.add_scalar("Val/accuracy", val_acc, epoch)
             logger.add_figure("results", figure, epoch)
+
+            # for key, value in val_loss_dict.items():
+            #         logger.add_scalar("Val_cls/"+key, value, epoch)
+            # for key, value in val_acc_dict.items():
+            #     logger.add_scalar("Val_cls/"+key, value, epoch)
+
+            logger.add_scalars('Val_cls/Mask Loss', dict(OrderedDict(list(val_loss_dict.items())[:3])), epoch * len(train_loader) + idx)
+            logger.add_scalars('Val_cls/Gender Loss', dict(OrderedDict(list(val_loss_dict.items())[3:5])), epoch * len(train_loader) + idx)
+            logger.add_scalars('Val_cls/Age Loss', dict(OrderedDict(list(val_loss_dict.items())[5:])), epoch * len(train_loader) + idx)
+            logger.add_scalars('Val_cls/Mask Accuracy', dict(OrderedDict(list(val_acc_dict.items())[:3])), epoch * len(train_loader) + idx)
+            logger.add_scalars('Val_cls/Gender Accuracy', dict(OrderedDict(list(val_acc_dict.items())[3:5])), epoch * len(train_loader) + idx)
+            logger.add_scalars('Val_cls/Age Accuracy', dict(OrderedDict(list(val_acc_dict.items())[5:])), epoch * len(train_loader) + idx)
+
+
             print()
 
+    ################## 
+    os.rename(f"{save_dir}/best.pth",f"{save_dir}/best_epoch{best_epoch:03d}.pth")
+    os.rename(f"{save_dir}/last.pth",f"{save_dir}/last_epoch{args.epochs-1:03d}.pth")
+    os.rename(f"{save_dir}/best_age60.pth",f"{save_dir}/best_age60_epoch{best_epoch_age60:03d}.pth")
+    ##################
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     # Data and model checkpoints directories
     parser.add_argument(
-        "--num_classes",
-        type=int,
-        default=18,  # Change this to the actual number of classes in your task
-        help="number of classes for classification",
-)
+        "--resume_from", type=str, help="path of model to resume training"
+    )
     parser.add_argument(
         "--seed", type=int, default=42, help="random seed (default: 42)"
     )
     parser.add_argument(
         "--epochs", type=int, default=1, help="number of epochs to train (default: 1)"
     )
-    parser.add_argument( # 안돼서 일단 추가 
-    "--dataset",
-    type=str,
-    default="MaskBaseDataset",
-    help="dataset type (default: MaskBaseDataset)",
-    )
     parser.add_argument(
-        "-resize-dataset",
+        "--dataset",
         type=str,
-        default="MaskBaseDataset",
-        help="dataset augmentation type (default: MaskBaseDataset)",
+        default="MaskSplitByProfileDataset",
+        help="dataset augmentation type (default: MaskSplitByProfileDataset)",
     )
     parser.add_argument(
         "--augmentation",
@@ -297,13 +418,13 @@ if __name__ == "__main__":
         "--resize",
         nargs=2,
         type=int,
-        default=[128, 96], #[224,224]
+        default=[128, 96],
         help="resize size for image when training",
     )
     parser.add_argument(
         "--batch_size",
         type=int,
-        default=32,
+        default=64,
         help="input batch size for training (default: 64)",
     )
     parser.add_argument(
@@ -313,17 +434,13 @@ if __name__ == "__main__":
         help="input batch size for validing (default: 1000)",
     )
     parser.add_argument(
-        "--model", type=str, default="BaseModel", help="model type (default: BaseModel)"
+        "--model", type=str, default="VITmodel", help="model type (BaseModel,ConvNextModel,VITmodel) "
     )
     parser.add_argument(
-        "--optimizer", type=str, default="SGD", help="optimizer type (default: SGD)"
+        "--optimizer", type=str, default="AdamW", help="optimizer type (default: AdamW)"
     )
     parser.add_argument(
-<<<<<<< HEAD
-        "--lr", type=float, default=1e-4, help="learning rate (default: 1e-3)"
-=======
         "--lr", type=float, default=1e-3, help="learning rate (default: 1e-3)"
->>>>>>> 5e6f37d261f68bfd72e52ad98732f9f88bcb970a
     )
     parser.add_argument(
         "--val_ratio",
@@ -334,8 +451,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--criterion",
         type=str,
-        default="cross_entropy",
-        help="criterion type (default: cross_entropy)",
+        default="focal",
+        help="criterion type (cross_entropy, focal, label_smoothing, f1)",
     )
     parser.add_argument(
         "--lr_decay_step",
@@ -357,10 +474,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data_dir",
         type=str,
-        default=os.environ.get("SM_CHANNEL_TRAIN", "/home/data/train/images"), #경로 계속 치기 귀찮아서 지정해버림 
+        default=os.environ.get("SM_CHANNEL_TRAIN", "../data/train/images"),
     )
     parser.add_argument(
-        "--model_dir", type=str, default=os.environ.get("SM_MODEL_DIR", "./saved_model")
+        "--model_dir", type=str, default=os.environ.get("SM_MODEL_DIR", "../model")
     )
 
     args = parser.parse_args()
@@ -368,7 +485,6 @@ if __name__ == "__main__":
 
     data_dir = args.data_dir
     model_dir = args.model_dir
-
-    vit_model = VITmodel(num_classes=args.num_classes) # VIT numclass 자꾸 못갖고오는것같아서 추가
+    # vit_model = VITmodel(num_classes=args.num_classes) # VIT numclass 자꾸 못갖고오는것같아서 추가
 
     train(data_dir, model_dir, args)
