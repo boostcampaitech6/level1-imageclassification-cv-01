@@ -203,22 +203,22 @@ class AgeBoundaryAcc():
 
 
     def cal_acc(self, len_set):
-        age_late_20s_acc = self.match_dict['age_late_20s'] / self.age_late_20s_cnt if self.age_late_20s_cnt !=0 else 0
-        age_late_50s_acc = self.match_dict['age_late_50s'] / self.age_late_50s_cnt if self.age_late_50s_cnt !=0 else 0
-        age_60s_acc = self.match_dict['age_60s'] / self.age_60s_cnt if self.age_60s_cnt!=0 else 0
+        late_20s_YOUNG = self.match_dict['age_late_20s'] / self.age_late_20s_cnt if self.age_late_20s_cnt !=0 else 0
+        late_50s_MIDDLE = self.match_dict['age_late_50s'] / self.age_late_50s_cnt if self.age_late_50s_cnt !=0 else 0
+        age_60s_OLD = self.match_dict['age_60s'] / self.age_60s_cnt if self.age_60s_cnt!=0 else 0
 
-        e_age_late_20s_acc = self.match_dict['e_age_late_20s'] / self.age_late_20s_cnt if self.age_late_20s_cnt !=0 else 0
-        e_age_late_50s_acc = self.match_dict['e_age_late_50s'] / self.age_late_50s_cnt if self.age_late_50s_cnt !=0 else 0
-        e_age_60s_acc = self.match_dict['e_age_60s'] / self.age_60s_cnt if self.age_60s_cnt!=0 else 0
+        late_20s_MIDDLE = self.match_dict['e_age_late_20s'] / self.age_late_20s_cnt if self.age_late_20s_cnt !=0 else 0
+        late_50s_OLD = self.match_dict['e_age_late_50s'] / self.age_late_50s_cnt if self.age_late_50s_cnt !=0 else 0
+        age_60s_MIDDLE = self.match_dict['e_age_60s'] / self.age_60s_cnt if self.age_60s_cnt!=0 else 0
 
 
 
         acc_dict = {
-            'age_late_20s_acc' : age_late_20s_acc / len_set,
-            'age_late_50s_acc' : age_late_50s_acc / len_set,
-            'age_60s_acc' : age_60s_acc / len_set,
-            'e_age_late_20s_acc' : e_age_late_20s_acc / len_set,
-            'e_age_late_50s_acc' : e_age_late_50s_acc /len_set,
-            'e_age_60s_acc' : e_age_60s_acc / len_set,
+            'late_20s_YOUNG' : late_20s_YOUNG / len_set,
+            'late_20s_MIDDLE' : late_20s_MIDDLE / len_set,
+            'late_50s_MIDDLE' : late_50s_MIDDLE / len_set,
+            'late_50s_OLD' : late_50s_OLD /len_set,
+            'age_60s_OLD' : age_60s_OLD / len_set,
+            'age_60s_MIDDLE' : age_60s_MIDDLE / len_set,
         }
         return acc_dict

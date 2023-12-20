@@ -276,12 +276,12 @@ def train(data_dir, model_dir, args):
                 'age_60_acc' : 0,
             }
             acc_dict = {
-            'age_late_20s_acc' : 0,
-            'age_late_50s_acc' : 0,
-            'age_60s_acc' : 0,
-            'e_age_late_20s_acc' : 0,
-            'e_age_late_50s_acc' : 0,
-            'e_age_60s_acc' : 0,
+            'late_20s_YOUNG' : 0,
+            'late_20s_MIDDLE' : 0,
+            'late_50s_MIDDLE' : 0,
+            'late_50s_OLD' : 0,
+            'age_60s_OLD' : 0,
+            'age_60s_MIDDLE' : 0,
 
             }
         
@@ -380,9 +380,9 @@ def train(data_dir, model_dir, args):
                 f"[Val] age loss {val_loss_dict['age_0_30_loss']:4.2}, {val_loss_dict['age_30_60_loss']:4.2}, {val_loss_dict['age_60_loss']:4.2} || training age accuracy {val_acc_dict['age_0_30_acc']:4.2%}, {val_acc_dict['age_30_60_acc']:4.2%}, {val_acc_dict['age_60_acc']:4.2%}\n"
             )
             print(
-                f"[Val] Late 20s YOUNG  {acc_dict['age_late_20s_acc']:4.2%} || MIDDLE(Error) {acc_dict['e_age_late_20s_acc']:4.2%}\n"
-                f"[Val] Late 50s MIDDLE {acc_dict['age_late_50s_acc']:4.2%} || OLD(Error)    {acc_dict['e_age_late_50s_acc']:4.2%}\n"
-                f"[Val] Age  60s OLD    {acc_dict['age_60s_acc']:4.2%} || MIDDLE(Error) {acc_dict['e_age_60s_acc']:4.2%}\n"
+                f"[Val] Late 20s YOUNG  {acc_dict['late_20s_YOUNG']:4.2%} || MIDDLE(Error) {acc_dict['late_20s_MIDDLE']:4.2%}\n"
+                f"[Val] Late 50s MIDDLE {acc_dict['late_50s_MIDDLE']:4.2%} || OLD(Error)    {acc_dict['late_50s_OLD']:4.2%}\n"
+                f"[Val] Age  60s OLD    {acc_dict['age_60s_OLD']:4.2%} || MIDDLE(Error) {acc_dict['age_60s_MIDDLE']:4.2%}\n"
             )
             
             logger.add_scalar("Val/loss", val_loss, epoch)
