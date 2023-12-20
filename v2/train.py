@@ -129,7 +129,7 @@ def train(data_dir, model_dir, args):
         mixup_fn = Mixup(
                 mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
                 prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
-                label_smoothing=args.label_smoothing, num_classes=args.nb_classes)
+                label_smoothing=args.label_smoothing, num_classe=num_classes)
 
     # -- data_loader
     train_set, val_set = dataset.split_dataset()
@@ -198,6 +198,10 @@ def train(data_dir, model_dir, args):
         matches = 0
         for idx, train_batch in enumerate(train_loader):
             inputs, labels = train_batch
+            
+            if mixup_fn is not None:
+                inputs, labels = mixup_fn(inputs, labels)
+                
             inputs = inputs.to(device)
             labels = labels.to(device)
 
@@ -491,6 +495,7 @@ if __name__ == "__main__":
                         help='Probability of switching to cutmix when both mixup and cutmix enabled')
     parser.add_argument('--mixup_mode', type=str, default='batch',
                         help='How to apply mixup/cutmix params. Per "batch", "pair", or "elem"')
+    parser.add_argument('--label_smoothing', type=float, default=0.1)
 
     args = parser.parse_args()
     print(args)
