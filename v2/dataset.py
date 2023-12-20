@@ -388,7 +388,9 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
                     id, gender, race, age = profile.split("_")
                     # if(phase=="train" and age in ["57","58","59"]):
                     #     continue
-                    if(phase=="train" and age in ["57","58"]):
+                    # if(phase=="train" and age in ["57","58"]):
+                    #     continue
+                    if(phase=="train" and age in ["58"]):
                         continue
                     if(phase=="train" and age in ["59"]):
                         age="60"
