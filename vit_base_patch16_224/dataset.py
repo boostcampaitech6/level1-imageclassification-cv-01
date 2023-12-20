@@ -16,6 +16,7 @@ from torchvision.transforms import (
     CenterCrop,
     ColorJitter,
 )
+from sklearn.model_selection import StratifiedKFold
 
 # 지원되는 이미지 확장자 리스트
 IMG_EXTENSIONS = [
@@ -328,26 +329,23 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
     구현은 val_ratio 에 맞게 train / val 나누는 것을 이미지 전체가 아닌 사람(profile)에 대해서 진행하여 indexing 을 합니다.
     이후 `split_dataset` 에서 index 에 맞게 Subset 으로 dataset 을 분기합니다.
     """
-
     def __init__(
         self,
         data_dir,
         mean=(0.548, 0.504, 0.479),
         std=(0.237, 0.247, 0.246),
         val_ratio=0.2,
-    ):
+        ):
         self.indices = defaultdict(list)
         super().__init__(data_dir, mean, std, val_ratio)
-
-    @staticmethod
-    def _split_profile(profiles, val_ratio):
-        """프로필을 학습과 검증용으로 나누는 메서드"""
-        length = len(profiles)
-        n_val = int(length * val_ratio)
-
-        val_indices = set(random.sample(range(length), k=n_val))
-        train_indices = set(range(length)) - val_indices
-        return {"train": train_indices, "val": val_indices}
+    
+    # _split_profile 메서드 추가
+    def _split_profile(self, profiles, val_ratio):
+        """프로필을 train과 val로 나누는 메서드"""
+        n_val = int(len(profiles) * val_ratio)
+        n_train = len(profiles) - n_val
+        train_profiles, val_profiles = random_split(profiles, [n_train, n_val])
+        return {"train": train_profiles, "val": val_profiles}
 
     def setup(self):
         """데이터셋 설정을 하는 메서드. 프로필 기준으로 나눈다."""
@@ -356,15 +354,14 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         split_profiles = self._split_profile(profiles, self.val_ratio)
 
         cnt = 0
-        for phase, indices in split_profiles.items():
-            for _idx in indices:
-                profile = profiles[_idx]
+        for phase, profile_list in split_profiles.items():
+            for profile in profile_list:
                 img_folder = os.path.join(self.data_dir, profile)
                 for file_name in os.listdir(img_folder):
                     _file_name, ext = os.path.splitext(file_name)
                     if (
                         _file_name not in self._file_names
-                    ):  # "." 로 시작하는 파일 및 invalid 한 파일들은 무시합니다
+                    ):  # "."로 시작하는 파일 및 유효하지 않은 파일들은 무시합니다
                         continue
 
                     img_path = os.path.join(
@@ -373,7 +370,7 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
                     mask_label = self._file_names[_file_name]
 
                     id, gender, race, age = profile.split("_")
-                    if(phase=="train" and age in ["57","58","59"]):
+                    if (phase == "train" and age in ["57", "58", "59"]):  # 57,58,59는 downsampling
                         continue
                     gender_label = GenderLabels.from_str(gender)
                     age_label = AgeLabels.from_number(age)
@@ -388,7 +385,23 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
 
     def split_dataset(self) -> List[Subset]:
         """프로필 기준으로 나눈 데이터셋을 Subset 리스트로 반환하는 메서드"""
-        return [Subset(self, indices) for phase, indices in self.indices.items()]
+        return [Subset(self, indices) for phase, indices in self.indices.items()]    
+
+
+    def stratified_split_dataset(self, n_splits=5, current_fold=0):
+        """나이를 기준으로 Stratified K-Fold를 수행하여 데이터셋을 나누는 메서드"""
+        """데이터의 각 세 그룹 (YOUNG, MIDDLE, OLD)에 대한 분포가 고르게 유지되어 
+        모델이 더 일반적인 특징을 학습할 수 있도록"""
+        skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+        indices = np.arange(len(self))
+        labels = np.array([label.value for label in self.age_labels]) # age 기준으로 
+
+        train_indices, val_indices = list(skf.split(indices, labels))[current_fold]
+
+        train_set = Subset(self, train_indices)
+        val_set = Subset(self, val_indices)
+
+        return train_set, val_set
 
 
 class TestDataset(Dataset):
@@ -417,3 +430,4 @@ class TestDataset(Dataset):
     def __len__(self):
         """데이터셋의 길이를 반환하는 메서드"""
         return len(self.img_paths)
+    
