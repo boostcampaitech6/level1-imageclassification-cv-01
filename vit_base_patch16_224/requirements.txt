@@ -6,6 +6,8 @@ Pillow==9.4.0
 python-dotenv==1.0.0
 scikit-learn==1.2.2
 tensorboard==2.13.0
+wandb==0.16.1
+opencv==4.6.0
 timm==0.9.12
 torch==1.12.1+cu113 
 torchvision==0.13.1+cu113 
