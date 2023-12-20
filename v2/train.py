@@ -134,14 +134,19 @@ def train(data_dir, model_dir, args):
 
     # -- data_loader
     train_set, val_set = dataset.split_dataset()
+    weights=dataset.weights
+    sample_weights=[weights[train_set[i][1]] for i in range(len(train_set))]
+    print(len(sample_weights))
+    sampler = torch.utils.data.sampler.WeightedRandomSampler(sample_weights, 9000,replacement=True)
 
     train_loader = DataLoader(
         train_set,
         batch_size=args.batch_size,
         num_workers=multiprocessing.cpu_count() // 2,
-        shuffle=True,
+        # shuffle=True,
         pin_memory=use_cuda,
         drop_last=True,
+        sampler=sampler,
     )
 
     val_loader = DataLoader(
