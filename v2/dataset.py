@@ -353,8 +353,10 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         mean=(0.548, 0.504, 0.479),
         std=(0.237, 0.247, 0.246),
         val_ratio=0.2,
+        age = None
     ):
         self.indices = defaultdict(list)
+        self.age = [] if age is None else age
         super().__init__(data_dir, mean, std, val_ratio)
 
     @staticmethod
@@ -400,6 +402,8 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
                     self.mask_labels.append(mask_label)
                     self.gender_labels.append(gender_label)
                     self.age_labels.append(age_label)
+                    
+                    self.age.append((int(age)))
 
                     self.indices[phase].append(cnt)
                     cnt += 1
