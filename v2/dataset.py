@@ -2,7 +2,7 @@ import os
 import random
 from collections import defaultdict
 from enum import Enum
-from typing import Tuple, List
+from typing import Any, Tuple, List
 
 import numpy as np
 import torch
@@ -15,7 +15,9 @@ from torchvision.transforms import (
     Compose,
     CenterCrop,
     ColorJitter,
+    RandomAdjustSharpness
 )
+
 
 # 지원되는 이미지 확장자 리스트
 IMG_EXTENSIONS = [
@@ -111,6 +113,22 @@ class CustomAugmentation:
             ]
         )
 
+    def __call__(self, image):
+        return self.transform(image)
+
+
+class SharpnessAdjustment:
+    """이미지에 샤프닝을 적용하는 클래스"""
+    def __init__(self, resize, mean, std, **args):
+        self.transform = Compose(
+            [
+                Resize(resize, Image.BILINEAR),
+                ToTensor(),
+                Normalize(mean=mean, std=std),
+                RandomAdjustSharpness(4)
+            ]
+        )
+    
     def __call__(self, image):
         return self.transform(image)
 
@@ -373,6 +391,8 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
                     mask_label = self._file_names[_file_name]
 
                     id, gender, race, age = profile.split("_")
+                    if(phase=="train" and age in ["57","58","59"]):
+                        continue
                     gender_label = GenderLabels.from_str(gender)
                     age_label = AgeLabels.from_number(age)
 
