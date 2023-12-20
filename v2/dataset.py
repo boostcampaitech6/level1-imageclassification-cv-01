@@ -417,3 +417,53 @@ class TestDataset(Dataset):
     def __len__(self):
         """데이터셋의 길이를 반환하는 메서드"""
         return len(self.img_paths)
+
+
+class OversamplingMaskDataset(MaskBaseDataset):
+    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2, oversample_ratio=0.3):
+        super().__init__(data_dir, mean, std, val_ratio)
+
+        self.elderly_image_paths = []
+        self.elderly_mask_labels = []
+        self.elderly_gender_labels = []
+        self.elderly_age_labels = []
+
+        self.oversample_ratio = oversample_ratio
+        self.setup_elderly_class()
+
+    def setup_elderly_class(self):
+        for i, age_label in enumerate(self.age_labels):
+            if age_label == AgeLabels.OLD:
+                self.elderly_image_paths.append(self.image_paths[i])
+                self.elderly_mask_labels.append(self.mask_labels[i])
+                self.elderly_gender_labels.append(self.gender_labels[i])
+                self.elderly_age_labels.append(self.age_labels[i])
+
+    def __len__(self):
+        original_length = super().__len__()
+        additional_length = int(original_length * self.oversample_ratio)
+        return original_length + additional_length
+
+    def __getitem__(self, index):
+        original_length = super().__len__()
+
+        if index < original_length:
+            return super().__getitem__(index)
+        else:
+            elderly_index = index - original_length
+            elderly_index = elderly_index % len(self.elderly_image_paths)
+
+            image_path = self.elderly_image_paths[elderly_index]
+            mask_label = self.elderly_mask_labels[elderly_index]
+            gender_label = self.elderly_gender_labels[elderly_index]
+            age_label = self.elderly_age_labels[elderly_index]
+
+            image = self.read_image_from_path(image_path)
+            multi_class_label = self.encode_multi_class(mask_label, gender_label, age_label)
+
+            image_transform = self.transform(image)
+            return image_transform, multi_class_label
+
+    def read_image_from_path(self, image_path):
+        
+        return Image.open(image_path)
