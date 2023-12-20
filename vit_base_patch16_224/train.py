@@ -440,7 +440,7 @@ if __name__ == "__main__":
         "--optimizer", type=str, default="AdamW", help="optimizer type (default: AdamW)"
     )
     parser.add_argument(
-        "--lr", type=float, default=1e-3, help="learning rate (default: 1e-3)"
+        "--lr", type=float, default=1e-4, help="learning rate (default: 1e-3)"
     )
     parser.add_argument(
         "--val_ratio",
