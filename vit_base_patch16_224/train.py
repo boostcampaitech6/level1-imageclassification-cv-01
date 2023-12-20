@@ -22,6 +22,7 @@ from accuracy_loss_print import AccuracyLoss
 from collections import OrderedDict
 
 from model import VITmodel # VIT추가
+import wandb
 
 
 
@@ -182,7 +183,9 @@ def train(data_dir, model_dir, args):
         optimizer.load_state_dict(model_data['optimizer_state_dict'])
         start_epoch = model_data['epoch'] + 1
     
-    
+    # Initialize WandB
+    wandb.init(project="vit_aug1", name=args.name)
+
     for epoch in range(start_epoch, args.epochs):
         # train loop
         model.train()
@@ -206,6 +209,13 @@ def train(data_dir, model_dir, args):
             loss_value += loss.item()
             matches += (preds == labels).sum().item()
             train_accloss = AccuracyLoss(labels, preds, outs, criterion)
+
+            train_loss = loss_value / args.log_interval
+            train_acc = matches / args.batch_size / args.log_interval
+            current_lr = get_lr(optimizer)
+            train_loss_dict, train_acc_dict = train_accloss.loss_acc(args.log_interval, 1)
+
+
             if (idx + 1) % args.log_interval == 0:
                 train_loss = loss_value / args.log_interval
                 train_acc = matches / args.batch_size / args.log_interval
@@ -247,6 +257,13 @@ def train(data_dir, model_dir, args):
 
                 loss_value = 0
                 matches = 0
+            # Log metrics to WandB
+            wandb.log({
+            "train_loss": train_loss,
+            "train_accuracy": train_acc,
+            "learning_rate": current_lr,
+            # ... add more metrics as needed ...
+            }, step=epoch * len(train_loader) + idx)
 
         scheduler.step()
 
@@ -311,6 +328,12 @@ def train(data_dir, model_dir, args):
                         n=16,
                         shuffle=args.dataset != "MaskSplitByProfileDataset",
                     )
+                # Log metrics to WandB
+                wandb.log({
+                    "val_loss": val_loss,
+                    "val_accuracy": val_acc,
+                    # ... add more metrics as needed ...
+                }, step=epoch * len(train_loader) + idx)
 
             val_loss = np.sum(val_loss_items) / len(val_loader)
             val_acc = np.sum(val_acc_items) / len(val_set)
