@@ -479,7 +479,9 @@ class MaskDataset(BaseDataset):
                     output_path = os.path.join(
                         output_dir, phase, str(class_index), profile + '_' + file_name
                     )
-                    
+                    if 50 <= int(age) <60 :
+                        if random.choices([0,1], [80, 20]) == [0]:
+                            continue
                     shutil.copy(img_path, output_path)
                         
  
@@ -942,7 +944,7 @@ def create_dataloader(dataset, is_train, batch_size, num_workers, pin_mem, dist_
 
 
 def build_transform(is_train, args):
-    if args.task in ["imagenet"]:
+    if args.task in ["imagenet","mask"]:
         return build_imagenet_transform(is_train, args)
 
     if is_train:
@@ -976,8 +978,8 @@ def build_transform(is_train, args):
 def build_imagenet_transform(is_train, args):
     resize_im = args.input_size > 32
     if is_train:
-        # this should always dispatch to transforms_imagenet_train
-        transform = create_transform(
+        if args.task in ["mask"]:
+            transform = create_transform(
             input_size=args.input_size,
             is_training=True,
             color_jitter=args.color_jitter,
@@ -986,9 +988,23 @@ def build_imagenet_transform(is_train, args):
             re_prob=args.reprob,
             re_mode=args.remode,
             re_count=args.recount,
-            mean=IMAGENET_DEFAULT_MEAN,
-            std=IMAGENET_DEFAULT_STD,
+            mean=(0.548, 0.504, 0.479),
+            std=(0.237, 0.247, 0.246),
         )
+        else:
+            # this should always dispatch to transforms_imagenet_train
+            transform = create_transform(
+                input_size=args.input_size,
+                is_training=True,
+                color_jitter=args.color_jitter,
+                auto_augment=args.aa,
+                interpolation=args.train_interpolation,
+                re_prob=args.reprob,
+                re_mode=args.remode,
+                re_count=args.recount,
+                mean=IMAGENET_DEFAULT_MEAN,
+                std=IMAGENET_DEFAULT_STD,
+            )
         if not resize_im:
             # replace RandomResizedCropAndInterpolation with
             # RandomCrop
@@ -1007,7 +1023,10 @@ def build_imagenet_transform(is_train, args):
         t.append(transforms.CenterCrop(args.input_size))
 
     t.append(transforms.ToTensor())
-    t.append(transforms.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD))
+    if args.task in ["mask"]:
+        t.append(transforms.Normalize(mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246)))
+    else:
+        t.append(transforms.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD))
     return transforms.Compose(t)
 
 
