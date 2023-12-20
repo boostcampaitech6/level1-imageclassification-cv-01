@@ -9,7 +9,6 @@ from importlib import import_module
 from pathlib import Path
 from timm.data.mixup import Mixup
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
-from timm.utils import accuracy
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -219,8 +218,6 @@ def train(data_dir, model_dir, args):
 
             outs = model(inputs)
             preds = torch.argmax(outs, dim=-1)
-            print("outs: ",outs.shape)
-            print("label: ", labels.shape)
             
             loss = criterion(outs, labels)
 
@@ -239,31 +236,32 @@ def train(data_dir, model_dir, args):
                 current_lr = get_lr(optimizer)
                 
                 if  mixup_fn is not None:
-                    train_acc, _ = accuracy(outs, labels, topk=(1, 5))
+                    print(
+                        f"Epoch[{epoch}/{args.epochs}]({idx + 1}/{len(train_loader)}) || "
+                        f"training total loss {train_loss:4.4} || lr {current_lr}"
+                    )                    
                     
                 else:
                     train_acc = matches / args.batch_size / args.log_interval
                     train_loss_dict, train_acc_dict = train_accloss.loss_acc(args.log_interval, 1)
-                
-
-                print(
-                    f"Epoch[{epoch}/{args.epochs}]({idx + 1}/{len(train_loader)}) || "
-                    f"training total loss {train_loss:4.4} || training total accuracy {train_acc:4.2%} || lr {current_lr}"
-                )
-                
-                if mixup_fn is None:
+                    print(
+                        f"Epoch[{epoch}/{args.epochs}]({idx + 1}/{len(train_loader)}) || "
+                        f"training total loss {train_loss:4.4} || training total accuracy {train_acc:4.2%} || lr {current_lr}"
+                    )
+                    
                     print(
                         f"training mask loss {train_loss_dict['mask_wear_loss']:4.4}, {train_loss_dict['mask_incorrect_loss']:4.4}, {train_loss_dict['mask_not_wear_loss']:4.4} || training mask accuracy {train_acc_dict['mask_wear_acc']:4.4%}, {train_acc_dict['mask_incorrect_acc']:4.4%}, {train_acc_dict['mask_not_wear_acc']:4.4%}\n"
                         f"training gender loss {train_loss_dict['male_loss']:4.4}, {train_loss_dict['female_loss']:4.4} || training gender accuracy {train_acc_dict['mask_not_wear_acc']:4.4%}, {train_acc_dict['female_acc'] :4.4%}\n"
                         f"training age loss {train_loss_dict['age_0_30_loss']:4.4}, {train_loss_dict['age_30_60_loss']:4.4}, {train_loss_dict['age_60_loss']:4.4} || training age accuracy {train_acc_dict['age_0_30_acc']:4.4%}, {train_acc_dict['age_30_60_acc']:4.4%}, {train_acc_dict['age_60_acc']:4.4%}\n"
                     )
+                    logger.add_scalar(
+                    "Train/accuracy", train_acc, epoch * len(train_loader) + idx
+                    )
 
                 logger.add_scalar(
                     "Train/loss", train_loss, epoch * len(train_loader) + idx
                 )
-                logger.add_scalar(
-                    "Train/accuracy", train_acc, epoch * len(train_loader) + idx
-                )
+
                 
                 if mixup_fn is None:
                     for key, value in train_loss_dict.items():
