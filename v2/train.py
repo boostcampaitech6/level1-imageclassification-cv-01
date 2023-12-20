@@ -129,7 +129,7 @@ def train(data_dir, model_dir, args):
         mixup_fn = Mixup(
                 mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
                 prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
-                label_smoothing=args.label_smoothing, num_classe=num_classes)
+                label_smoothing=args.label_smoothing, num_classes=num_classes)
 
     # -- data_loader
     train_set, val_set = dataset.split_dataset()
