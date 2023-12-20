@@ -125,12 +125,12 @@ def train(data_dir, model_dir, args):
     mixup_fn = None
     mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
     if mixup_active:
-        print("Mixup is activated!")
+        #print("Mixup is activated!")
         mixup_fn = Mixup(
                 mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
                 prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
                 label_smoothing=args.label_smoothing, num_classes=num_classes)
-        print(num_classes)
+        #print(num_classes)
 
     # -- data_loader
     train_set, val_set = dataset.split_dataset()
@@ -213,8 +213,8 @@ def train(data_dir, model_dir, args):
             inputs = inputs.to(device)
             labels = labels.to(device)
             
-            if mixup_fn is not None:
-                inputs, labels = mixup_fn(inputs, labels)
+            # if mixup_fn is not None:
+            #     inputs, labels = mixup_fn(inputs, labels)
 
             optimizer.zero_grad()
 
@@ -227,8 +227,7 @@ def train(data_dir, model_dir, args):
             optimizer.step()
             
             loss_value += loss.item()
-            print("preds: ", preds)
-            print("labels: ", labels)
+
             matches += (preds == labels).sum().item()
             train_accloss = AccuracyLoss(labels, preds, outs, criterion)
             if (idx + 1) % args.log_interval == 0:
@@ -508,7 +507,7 @@ if __name__ == "__main__":
                         help='Probability of switching to cutmix when both mixup and cutmix enabled')
     parser.add_argument('--mixup_mode', type=str, default='batch',
                         help='How to apply mixup/cutmix params. Per "batch", "pair", or "elem"')
-    parser.add_argument('--label_smoothing', type=float, default=0.1)
+    parser.add_argument('--label_smoothing', type=float, default=0.0)
 
     args = parser.parse_args()
     print(args)
