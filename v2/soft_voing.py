@@ -108,14 +108,18 @@ def voting(data_dir, model_dir, output_dir, args):
     print("Calculating inference results..")
     preds = []
     with torch.no_grad():
-        for idx, images in enumerate(loader_1):
-            images = images.to(device)
-            pred_1 = model_1(images)
-            pred_2 = model_2(images)
-            pred_3 = model_3(images)
-            pred = (pred_1 + pred_2 + pred_3) / 3
+        for images_1, images_2, images_3 in zip(loader_1, loader_2, loader_3):
+            images_1 = images_1.to(device)
+            images_2 = images_2.to(device)
+            images_3 = images_3.to(device)
+            
+            pred_1 = model_1(images_1)
+            pred_2 = model_2(images_2)
+            pred_3 = model_3(images_3)
 
+            pred = pred_1 * 0.4 + pred_2 * 0.3 + pred_3 * 0.3
             pred = pred.argmax(dim=-1)
+
             preds.extend(pred.cpu().numpy())
 
     ############################# 
