@@ -403,8 +403,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        default="MaskBaseDataset",
-        help="dataset augmentation type (default: MaskBaseDataset)",
+        default="MaskSplitByProfileDataset",
+        help="dataset augmentation type (default: MaskSplitByProfileDataset)",
     )
     parser.add_argument(
         "--augmentation",
@@ -435,7 +435,7 @@ if __name__ == "__main__":
         "--model", type=str, default="BaseModel", help="model type (default: BaseModel)"
     )
     parser.add_argument(
-        "--optimizer", type=str, default="SGD", help="optimizer type (default: SGD)"
+        "--optimizer", type=str, default="AdamW", help="optimizer type (default: AdamW)"
     )
     parser.add_argument(
         "--lr", type=float, default=1e-3, help="learning rate (default: 1e-3)"
