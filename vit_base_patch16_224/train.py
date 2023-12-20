@@ -11,7 +11,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import wandb
 
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader
@@ -217,17 +216,15 @@ def train(data_dir, model_dir, args):
             loss_value += loss.item()
             matches += (preds == labels).sum().item()
             train_accloss = AccuracyLoss(labels, preds, outs, criterion)
-
-            
             # WandB - Log training metrics
             wandb.log({
                 'train_loss': loss_value / args.log_interval,
                 'train_accuracy': matches / args.batch_size / args.log_interval,
                 'current_lr': get_lr(optimizer),
-                "age_labels": labels[:, 2].tolist()
-                # Add more metrics as needed
-            })
-
+                'age_label_0': labels[0].tolist(),  # 나이 라벨 0
+                'age_label_1': labels[1].tolist(),  # 나이 라벨 1
+                'age_label_2': labels[2].tolist(),  # 나이 라벨 2
+                    })
 
             if (idx + 1) % args.log_interval == 0:
                 train_loss = loss_value / args.log_interval
@@ -270,6 +267,20 @@ def train(data_dir, model_dir, args):
 
                 loss_value = 0
                 matches = 0
+
+                # WandB - Log training metrics
+                wandb.log({
+                'train_acc_mask_wear': train_acc_dict['mask_wear_acc'],
+                'train_acc_mask_incorrect': train_acc_dict['mask_incorrect_acc'],
+                'train_acc_mask_not_wear': train_acc_dict['mask_not_wear_acc'],
+    
+                'train_acc_male': train_acc_dict['male_acc'],
+                'train_acc_female': train_acc_dict['female_acc'],
+    
+                'train_acc_age_0_30': train_acc_dict['age_0_30_acc'],
+                'train_acc_age_30_60': train_acc_dict['age_30_60_acc'],
+                'train_acc_age_60': train_acc_dict['age_60_acc'],
+                })
 
         scheduler.step()
 
