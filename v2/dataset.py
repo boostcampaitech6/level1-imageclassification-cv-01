@@ -15,6 +15,8 @@ from torchvision.transforms import (
     Compose,
     CenterCrop,
     ColorJitter,
+    RandomHorizontalFlip,
+    RandomAdjustSharpness,
 )
 
 # 지원되는 이미지 확장자 리스트
@@ -322,8 +324,27 @@ class MaskBaseDataset(Dataset):
         return train_set, val_set
 
 
+class CustomAugmentation_for_Oversampling:
+    """Oversampling에 적용할 커스텀 Augmentation을 담당하는 클래스"""
+
+    def __init__(self, resize, mean, std, **args):
+        self.transform = Compose(
+            [
+                CenterCrop((384, 384)),
+                Resize(resize, Image.BILINEAR),
+                RandomHorizontalFlip(p=1),
+                
+                # ColorJitter(0.0, 0.1, 0.1, 0.1, p=1),
+                ToTensor(),
+                Normalize(mean=mean, std=std),
+                RandomAdjustSharpness(sharpness_factor=4, p=1),
+                # AddGaussianNoise(),
+            ]
+        )
+
+
 class OversamplingMaskDataset(MaskBaseDataset):
-    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2, oversample_ratio=0.3, augmentation=None):
+    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2, oversample_ratio=0.3):
         super().__init__(data_dir, mean, std, val_ratio)
 
         self.elderly_image_paths = []
@@ -332,7 +353,7 @@ class OversamplingMaskDataset(MaskBaseDataset):
         self.elderly_age_labels = []
 
         self.oversample_ratio = oversample_ratio
-        self.augmentation = augmentation or CustomAugmentation(resize=(224, 224), mean=mean, std=std)
+        self.augmentation = CustomAugmentation_for_Oversampling(resize=(224, 224), mean=mean, std=std)
 
         self.setup_elderly_class()
 
