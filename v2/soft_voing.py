@@ -13,7 +13,7 @@ from datetime import datetime, timezone, timedelta
 
 
 
-def load_model(saved_model, num_classes, device, model_name):
+def load_model(saved_model, num_classes, device, model_name, model):
     """
     저장된 모델의 가중치를 로드하는 함수입니다.
 
@@ -25,7 +25,7 @@ def load_model(saved_model, num_classes, device, model_name):
     Returns:
         model (nn.Module): 가중치가 로드된 모델
     """
-    model_cls = getattr(import_module("model"), args.models)
+    model_cls = getattr(import_module("model"), model)
     model = model_cls(num_classes=num_classes)
 
     # tarpath = os.path.join(saved_model, 'best.tar.gz')
@@ -62,9 +62,9 @@ def voting(data_dir, model_dir, output_dir, args):
     # 클래스의 개수를 설정한다. (마스크, 성별, 나이의 조합으로 18)
     num_classes = MaskBaseDataset.num_classes  # 18
     
-    model_1 = load_model(model_dir, num_classes, device, args.model_files[0]).to(device)
-    model_2 = load_model(model_dir, num_classes, device, args.model_files[1]).to(device)
-    model_3 = load_model(model_dir, num_classes, device, args.model_files[2]).to(device)
+    model_1 = load_model(model_dir, num_classes, device, args.model_files[0], args.models[0]).to(device)
+    model_2 = load_model(model_dir, num_classes, device, args.model_files[1], args.models[1]).to(device)
+    model_3 = load_model(model_dir, num_classes, device, args.model_files[2], args.models[2]).to(device)
     model_1.eval()
     model_2.eval()
     model_3.eval()
@@ -115,9 +115,27 @@ def voting(data_dir, model_dir, output_dir, args):
             
             pred_1 = model_1(images_1)
             pred_2 = model_2(images_2)
-            pred_3 = model_3(images_3)
+            if '3fc' in args.models[2]:
+                pred_3 = []
+                logits_age,logits_mask,logits_gender = model_3(images_3)
+                for i in range(logits_mask.shape[0]):
+                    p_3 = []
+                    for mask in logits_mask[i]:
+                        for gender in logits_gender[i]:
+                            for age in logits_age[i]:
+                                p_3.append(float(mask * gender * age))
+                    pred_3.append(p_3)
+                pred_3 = torch.tensor(pred_3).to(device)
 
-            pred = pred_1 * 0.4 + pred_2 * 0.3 + pred_3 * 0.3
+            else:
+                pred_3 = model_3(images_3)
+
+            softmax = torch.nn.Softmax(dim=1)
+            sp_1 = softmax(pred_1)
+            sp_2 = softmax(pred_2)                       
+            sp_3 = softmax(pred_3)
+
+            pred = sp_1 * 0.4 + sp_2 * 0.3 + sp_3 * 0.3
             pred = pred.argmax(dim=-1)
 
             preds.extend(pred.cpu().numpy())
