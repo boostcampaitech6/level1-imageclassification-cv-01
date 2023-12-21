@@ -16,7 +16,7 @@ from torchvision.transforms import (
     CenterCrop,
     ColorJitter,
     RandomHorizontalFlip,
-    Lambda
+    RandomAdjustSharpness,
 )
 
 # 지원되는 이미지 확장자 리스트
@@ -438,3 +438,74 @@ class TestDataset(Dataset):
     def __len__(self):
         """데이터셋의 길이를 반환하는 메서드"""
         return len(self.img_paths)
+
+
+class CustomAugmentation_for_Oversampling:
+    """
+    Oversampling에 적용할 커스텀 Augmentation을 담당하는 클래스
+    23.12.21 수정 -> train.py의 sampler 관련 부분을 주석처리해야 사용가능 
+    """
+
+    def __init__(self, resize, mean, std, **args):
+        self.transform = Compose(
+            [
+                CenterCrop((384, 384)),
+                Resize(resize, Image.BILINEAR),
+                RandomHorizontalFlip(p=1),
+                ToTensor(),
+                Normalize(mean=mean, std=std),
+                RandomAdjustSharpness(sharpness_factor=4, p=1),
+            ]
+        )
+        
+    def __call__(self, image):
+        return self.transform(image)
+
+
+class OversamplingMaskDataset(MaskBaseDataset):
+    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2, oversample_ratio=0.3):
+        super().__init__(data_dir, mean, std, val_ratio)
+
+        self.elderly_image_paths = []
+        self.elderly_mask_labels = []
+        self.elderly_gender_labels = []
+        self.elderly_age_labels = []
+
+        self.oversample_ratio = oversample_ratio
+        self.augmentation = CustomAugmentation_for_Oversampling(resize=(224, 224), mean=mean, std=std)
+
+        self.setup_elderly_class()
+
+    def setup_elderly_class(self):
+        for i, age_label in enumerate(self.age_labels):
+            if age_label == AgeLabels.OLD:
+                self.elderly_image_paths.append(self.image_paths[i])
+                self.elderly_mask_labels.append(self.mask_labels[i])
+                self.elderly_gender_labels.append(self.gender_labels[i])
+                self.elderly_age_labels.append(self.age_labels[i])
+
+    def __len__(self):
+        original_length = super().__len__()
+        additional_length = int(original_length * self.oversample_ratio)
+        return original_length + additional_length
+
+    def __getitem__(self, index):
+        original_length = super().__len__()
+
+        if index < original_length:
+            return super().__getitem__(index)
+        else:
+            elderly_index = index - original_length
+            elderly_index %= len(self.elderly_image_paths)
+
+            image_path = self.elderly_image_paths[elderly_index]
+            image = Image.open(image_path)
+            image = self.augmentation(image)
+
+            mask_label = self.elderly_mask_labels[elderly_index]
+            gender_label = self.elderly_gender_labels[elderly_index]
+            age_label = self.elderly_age_labels[elderly_index]
+
+            multi_class_label = self.encode_multi_class(mask_label, gender_label, age_label)
+            
+            return image, multi_class_label
