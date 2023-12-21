@@ -2,7 +2,7 @@ import os
 import random
 from collections import defaultdict
 from enum import Enum
-from typing import Tuple, List
+from typing import Any, Tuple, List
 
 import numpy as np
 import torch
@@ -15,7 +15,9 @@ from torchvision.transforms import (
     Compose,
     CenterCrop,
     ColorJitter,
+    RandomAdjustSharpness
 )
+
 
 # 지원되는 이미지 확장자 리스트
 IMG_EXTENSIONS = [
@@ -111,6 +113,22 @@ class CustomAugmentation:
             ]
         )
 
+    def __call__(self, image):
+        return self.transform(image)
+
+
+class SharpnessAdjustment:
+    """이미지에 샤프닝을 적용하는 클래스"""
+    def __init__(self, resize, mean, std, **args):
+        self.transform = Compose(
+            [
+                Resize(resize, Image.BILINEAR),
+                ToTensor(),
+                Normalize(mean=mean, std=std),
+                RandomAdjustSharpness(4)
+            ]
+        )
+    
     def __call__(self, image):
         return self.transform(image)
 
@@ -335,9 +353,11 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         mean=(0.548, 0.504, 0.479),
         std=(0.237, 0.247, 0.246),
         val_ratio=0.2,
+        age = None
     ):
         self.indices = defaultdict(list)
         self.counts = [0,0,-10,0,0,-10,0,0,-10,0,0,-10,0,0,-10,0,0,-10]
+        self.age = [] if age is None else age
         super().__init__(data_dir, mean, std, val_ratio)
         self.weights=[1/item for item in self.counts]
 
@@ -386,6 +406,8 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
                     self.age_labels.append(age_label)
                     if(phase=="train"):
                         self.counts[MaskBaseDataset.encode_multi_class(mask_label,gender_label,age_label)]+=1
+                    
+                    self.age.append((int(age)))
 
                     self.indices[phase].append(cnt)
                     cnt += 1
