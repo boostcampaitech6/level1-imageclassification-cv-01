@@ -2,60 +2,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
-import timm # needed library
+import timm 
 from timm.data import resolve_data_config
 from timm.data.transforms_factory import create_transform
 from typing import Callable, List, Optional, Sequence, Tuple, Union
 import torchvision.models as models
 
 
-class MyModel_efficient_v2_s(nn.Module):
-    def __init__(self, num_classes):
-        super().__init__()
-
-        efficient = models.efficientnet_v2_s(pretrained=True)
-        self.features = efficient.features
-
-        self.classifier = nn.Sequential(
-            nn.Dropout(p=0.2,inplace = True),
-            nn.Linear(in_features=1280, out_features=18, bias=True)
-
-        )
-
-    def forward(self, x):
-        x = self.features(x)
-        x = x.mean([2, 3])
-        x = self.classifier(x)
-        return x
-
-class MyModel_efficient_v2_l(nn.Module):
-    def __init__(self, num_classes):
-        super().__init__()
-
-        efficient = models.efficientnet_v2_l(pretrained=True)
-        self.features = efficient.features
-
-        self.classifier = nn.Sequential(
-            nn.Dropout(p=0.4,inplace = True),
-            nn.Linear(in_features=1280, out_features=18, bias=True)
-
-        )
-
-    def forward(self, x):
-        x = self.features(x)
-        x = x.mean([2, 3])
-        x = self.classifier(x)
-        return x
-    
 class BaseModel(nn.Module):
-    """
-    기본적인 컨볼루션 신경망 모델
-    """
-
     def __init__(self, num_classes):
         """
         모델의 레이어 초기화
-
         Args:
             num_classes (int): 출력 레이어의 뉴런 수
         """
@@ -73,7 +30,6 @@ class BaseModel(nn.Module):
         """
         Args:
             x (torch.Tensor): 입력 이미지 텐서
-
         Returns:
             x (torch.Tensor): num_classes 크기의 출력 텐서
         """
@@ -94,8 +50,6 @@ class BaseModel(nn.Module):
         x = x.view(-1, 128)
         return self.fc(x)
 
-
-# Custom Model Template
 class MyModel(nn.Module):
     def __init__(self, num_age_classes,num_gender_classes,num_mask_classes):
         super().__init__()
@@ -126,11 +80,46 @@ class MyModel(nn.Module):
         
         return age,gender,mask
 
-
-class ConvNextModel(nn.Module):
+## Efficient 
+class MyModel_efficient_v2_s(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
 
+        efficient = models.efficientnet_v2_s(pretrained=True)
+        self.features = efficient.features
+
+        self.classifier = nn.Sequential(
+            nn.Dropout(p=0.2,inplace = True),
+            nn.Linear(in_features=1280, out_features=18, bias=True)
+        )
+    def forward(self, x):
+        x = self.features(x)
+        x = x.mean([2, 3])
+        x = self.classifier(x)
+        return x
+
+class MyModel_efficient_v2_l(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+
+        efficient = models.efficientnet_v2_l(pretrained=True)
+        self.features = efficient.features
+
+        self.classifier = nn.Sequential(
+            nn.Dropout(p=0.4,inplace = True),
+            nn.Linear(in_features=1280, out_features=18, bias=True)
+        )
+    def forward(self, x):
+        x = self.features(x)
+        x = x.mean([2, 3])
+        x = self.classifier(x)
+        return x
+    
+
+## ConvNext
+class ConvNextModel(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
 
         # Initializing a model (with random weights) from the convnext-tiny-224 style configuration
         self.convnext = torchvision.models.convnext_tiny(weights='IMAGENET1K_V1')
@@ -144,7 +133,6 @@ class ConvNextModel(nn.Module):
             nn.Linear(in_features=768, out_features=num_classes, bias=True)
         )
 
-
     def forward(self, x):
         """
         1. 위에서 정의한 모델 아키텍쳐를 forward propagation 을 진행해주세요
@@ -154,11 +142,9 @@ class ConvNextModel(nn.Module):
         
         return x
 
-    
 class ConvNextModel_3fc(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
-
 
         # Initializing a model (with random weights) from the convnext-tiny-224 style configuration
         self.convnext = torchvision.models.convnext_tiny(weights='IMAGENET1K_V1')
@@ -171,16 +157,11 @@ class ConvNextModel_3fc(nn.Module):
         )
         
         self.classifier_age = nn.Linear(in_features=512, out_features=3, bias=True)
-        
         self.classifier_mask = nn.Linear(in_features=512, out_features=3, bias=True)
         self.classifier_gender = nn.Linear(in_features=512, out_features=2, bias=True)
 
-
     def forward(self, x):
-        """
-        1. 위에서 정의한 모델 아키텍쳐를 forward propagation 을 진행해주세요
-        2. 결과로 나온 output 을 return 해주세요
-        """
+
         x=self.convnext(x)
         age=self.classifier_age(x)
         mask=self.classifier_mask(x)
@@ -191,7 +172,6 @@ class ConvNextModel_3fc(nn.Module):
 class ConvNextModel(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
-
 
         # Initializing a model (with random weights) from the convnext-tiny-224 style configuration
         self.convnext = torchvision.models.convnext_tiny(weights='IMAGENET1K_V1')
@@ -205,14 +185,8 @@ class ConvNextModel(nn.Module):
             nn.Linear(in_features=768, out_features=num_classes, bias=True)
         )
 
-
     def forward(self, x):
-        """
-        1. 위에서 정의한 모델 아키텍쳐를 forward propagation 을 진행해주세요
-        2. 결과로 나온 output 을 return 해주세요
-        """
         x=self.convnext(x)
-        
         return x
 
 class ConvNext_timm(nn.Module):
@@ -228,4 +202,24 @@ class ConvNext_timm(nn.Module):
     def forward(self, x):
         x = self.model(x)
         
+        return x
+
+
+## VIT16
+class VITmodel(nn.Module): 
+    def __init__(self, num_classes):
+        super().__init__()
+
+        # Create the ViT model
+        self.model = timm.create_model('vit_base_patch16_224', pretrained=True)
+
+        # Get the number of features in the ViT model's final layer
+        num_features = self.model.head.in_features
+
+        # Modify the final layer for classification *** 중요
+        self.model.head = nn.Linear(num_features, num_classes)
+
+    def forward(self, x):
+        # Forward pass through the ViT model
+        x = self.model(x)
         return x

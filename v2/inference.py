@@ -1,19 +1,16 @@
 import argparse
 import multiprocessing
 import os
-from importlib import import_module
-
+import glob
 import pandas as pd
 import torch
 import torch.nn as nn
+
+from importlib import import_module
 from torch.utils.data import DataLoader
-
 from dataset import TestDataset, MaskBaseDataset
-
-##########
 from datetime import datetime, timezone, timedelta
-import glob
-##########
+
 
 def load_model(saved_model, num_classes, device, model_name):
     """
