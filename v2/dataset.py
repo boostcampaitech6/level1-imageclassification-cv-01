@@ -18,7 +18,7 @@ from torchvision.transforms import (
     RandomHorizontalFlip,
     RandomAdjustSharpness,
 )
-
+from sklearn.model_selection import StratifiedKFold
 
 # 지원되는 이미지 확장자 리스트
 IMG_EXTENSIONS = [
@@ -358,7 +358,6 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
     구현은 val_ratio 에 맞게 train / val 나누는 것을 이미지 전체가 아닌 사람(profile)에 대해서 진행하여 indexing 을 합니다.
     이후 `split_dataset` 에서 index 에 맞게 Subset 으로 dataset 을 분기합니다.
     """
-
     def __init__(
         self,
         data_dir,
@@ -366,21 +365,22 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         std=(0.229, 0.224, 0.225),#(0.237, 0.247, 0.246),
         val_ratio=0.2,
         age = None
-    ):
+        ):
         self.indices = defaultdict(list)
         self.counts = [0,0,-10,0,0,-10,0,0,-10,0,0,-10,0,0,-10,0,0,-10]
         self.age = [] if age is None else age
         super().__init__(data_dir, mean, std, val_ratio)
         self.weights=[1/item for item in self.counts]
-
-    @staticmethod
-    def _split_profile(profiles, val_ratio):
-        """프로필을 학습과 검증용으로 나누는 메서드"""
+    
+    # _split_profile 메서드 추가
+    def _split_profile(self, profiles, val_ratio):
+        """프로필을 train과 val로 나누는 메서드"""
         length = len(profiles)
-        n_val = int(length * val_ratio)
-
+        n_val = int(len(profiles) * val_ratio)
+        #n_train = len(profiles) - n_val
         val_indices = set(random.sample(range(length), k=n_val))
         train_indices = set(range(length)) - val_indices
+        #train_profiles, val_profiles = random_split(profiles, [n_train, n_val])
         return {"train": train_indices, "val": val_indices}
 
     def setup(self):
@@ -425,8 +425,23 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
 
     def split_dataset(self) -> List[Subset]:
         """프로필 기준으로 나눈 데이터셋을 Subset 리스트로 반환하는 메서드"""
-        return [Subset(self, indices) for phase, indices in self.indices.items()]
+        return [Subset(self, indices) for phase, indices in self.indices.items()]    
 
+
+    def stratified_split_dataset(self, n_splits=5, current_fold=0):
+        """나이를 기준으로 Stratified K-Fold를 수행하여 데이터셋을 나누는 메서드"""
+        """데이터의 각 세 그룹 (YOUNG, MIDDLE, OLD)에 대한 분포가 고르게 유지되어 
+        모델이 더 일반적인 특징을 학습할 수 있도록"""
+        skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+        indices = np.arange(len(self))
+        labels = np.array([label.value for label in self.age_labels]) # age 기준으로 
+
+        train_indices, val_indices = list(skf.split(indices, labels))[current_fold]
+
+        train_set = Subset(self, train_indices)
+        val_set = Subset(self, val_indices)
+
+        return train_set, val_set
 
 class TestDataset(Dataset):
     """테스트 데이터셋 클래스"""
