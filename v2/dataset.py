@@ -356,8 +356,10 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         age = None
     ):
         self.indices = defaultdict(list)
+        self.counts = [0,0,-10,0,0,-10,0,0,-10,0,0,-10,0,0,-10,0,0,-10]
         self.age = [] if age is None else age
         super().__init__(data_dir, mean, std, val_ratio)
+        self.weights=[1/item for item in self.counts]
 
     @staticmethod
     def _split_profile(profiles, val_ratio):
@@ -402,6 +404,8 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
                     self.mask_labels.append(mask_label)
                     self.gender_labels.append(gender_label)
                     self.age_labels.append(age_label)
+                    if(phase=="train"):
+                        self.counts[MaskBaseDataset.encode_multi_class(mask_label,gender_label,age_label)]+=1
                     
                     self.age.append((int(age)))
 
