@@ -1,29 +1,9 @@
 import torch.nn as nn
 import torch.nn.functional as F
-
+import torchvision
 import timm # needed library
 from timm.data import resolve_data_config
 from timm.data.transforms_factory import create_transform
-
-
-# model vit
-class VITmodel(nn.Module): 
-    def __init__(self, num_classes):
-        super().__init__()
-
-        # Create the ViT model
-        self.model = timm.create_model('vit_base_patch16_224', pretrained=True)
-
-        # Get the number of features in the ViT model's final layer
-        num_features = self.model.head.in_features
-
-        # Modify the final layer for classification *** 중요
-        self.model.head = nn.Linear(num_features, num_classes)
-
-    def forward(self, x):
-        # Forward pass through the ViT model
-        x = self.model(x)
-        return x
 
 
 
@@ -75,20 +55,46 @@ class BaseModel(nn.Module):
         return self.fc(x)
 
 
-# Custom Model Template
-class MyModel(nn.Module):
+class ConvNextModel(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
 
-        """
-        1. 위와 같이 생성자의 parameter 에 num_claases 를 포함해주세요.
-        2. 나만의 모델 아키텍쳐를 디자인 해봅니다.
-        3. 모델의 output_dimension 은 num_classes 로 설정해주세요.
-        """
+
+        # Initializing a model (with random weights) from the convnext-tiny-224 style configuration
+        self.convnext = torchvision.models.convnext_tiny(weights='IMAGENET1K_V1')
+        self.convnext.classifier = nn.Sequential(
+            nn.LayerNorm((768,1,1,), eps=1e-06, elementwise_affine=True),
+            nn.Flatten(start_dim=1, end_dim=-1),
+            # nn.Linear(in_features=768, out_features=1024, bias=True),
+            #nn.Linear(in_features=1024, out_features=num_classes, bias=True)
+            nn.Linear(in_features=768, out_features=num_classes, bias=True)
+        )
+
 
     def forward(self, x):
         """
         1. 위에서 정의한 모델 아키텍쳐를 forward propagation 을 진행해주세요
         2. 결과로 나온 output 을 return 해주세요
         """
+        x=self.convnext(x)
+        
+        return x
+    
+
+class VITmodel(nn.Module): 
+    def __init__(self, num_classes):
+        super().__init__()
+
+        # Create the ViT model
+        self.model = timm.create_model('vit_base_patch16_224', pretrained=True)
+
+        # Get the number of features in the ViT model's final layer
+        num_features = self.model.head.in_features
+
+        # Modify the final layer for classification *** 중요
+        self.model.head = nn.Linear(num_features, num_classes)
+
+    def forward(self, x):
+        # Forward pass through the ViT model
+        x = self.model(x)
         return x

@@ -11,7 +11,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -20,14 +19,7 @@ from dataset import MaskBaseDataset
 from loss import create_criterion
 
 from accuracy_loss_print import AccuracyLoss
-from collections import OrderedDict
 
-from model import VITmodel # VIT추가
-import wandb
-
-
-# Initialize wandb
-wandb.init(project="vit_aug1", name="exp")
 
 def seed_everything(seed):
     torch.manual_seed(seed)
@@ -109,16 +101,13 @@ def train(data_dir, model_dir, args):
     device = torch.device("cuda" if use_cuda else "cpu")
 
     # -- dataset
-    dataset_module = getattr( import_module("dataset"), args.dataset) # default: MaskBaseDataset
-    dataset = dataset_module(data_dir=data_dir,)
+    dataset_module = getattr(
+        import_module("dataset"), args.dataset
+    )  # default: MaskBaseDataset
+    dataset = dataset_module(
+        data_dir=data_dir,
+    )
     num_classes = dataset.num_classes  # 18
-    # stratified_kfold면 
-    if args.use_stratified_kfold:
-        train_set, val_set = dataset.stratified_split_dataset(
-            n_splits=args.num_splits, current_fold=args.current_fold
-        )
-    else:
-        train_set, val_set = dataset.split_dataset()
 
     # -- augmentation
     transform_module = getattr(
@@ -133,14 +122,19 @@ def train(data_dir, model_dir, args):
 
     # -- data_loader
     train_set, val_set = dataset.split_dataset()
+    weights=dataset.weights
+    sample_weights=[weights[train_set[i][1]] for i in range(len(train_set))]
+    print(len(sample_weights))
+    sampler = torch.utils.data.sampler.WeightedRandomSampler(sample_weights, 9000,replacement=True)
 
     train_loader = DataLoader(
         train_set,
         batch_size=args.batch_size,
         num_workers=multiprocessing.cpu_count() // 2,
-        shuffle=True,
+        # shuffle=True,
         pin_memory=use_cuda,
         drop_last=True,
+        sampler=sampler,
     )
 
     val_loader = DataLoader(
@@ -158,7 +152,10 @@ def train(data_dir, model_dir, args):
     model = torch.nn.DataParallel(model)
         
     # -- loss & metric
-    criterion = create_criterion(args.criterion)  # default: cross_entropy
+    criterion_age = create_criterion(args.criterion_age)  # default: cross_entropy
+    criterion_mask = create_criterion(args.criterion_mask) # f1을 쓸 경우 class argument 추가
+    criterion_gender = create_criterion(args.criterion_gender)
+    
     opt_module = getattr(import_module("torch.optim"), args.optimizer)  # default: SGD
     optimizer = opt_module(
         filter(lambda p: p.requires_grad, model.parameters()),
@@ -177,110 +174,82 @@ def train(data_dir, model_dir, args):
     best_val_acc = 0
     best_val_loss = np.inf
     best_epoch = 0 
-
-    best_val_age60_acc = 0
-    best_epoch_age60 = 0
+    
+    best_val_age_acc = 0
+    best_epoch_age = 0
     
     start_epoch = 0
-
-    # WandB - Save hyperparameters
-    wandb.config.update(args)
-
+    
     if args.resume_from:
         model_data = torch.load(args.resume_from)
         model.load_state_dict(model_data['model_state_dict'])
         optimizer.load_state_dict(model_data['optimizer_state_dict'])
         start_epoch = model_data['epoch'] + 1
     
-    
+    torch.autograd.set_detect_anomaly(True)
     for epoch in range(start_epoch, args.epochs):
+        torch.cuda.empty_cache()
         # train loop
         model.train()
-        loss_value = 0
+        loss_val_age = 0
+        loss_val_mask = 0
+        loss_val_gender = 0
         matches = 0
         for idx, train_batch in enumerate(train_loader):
             inputs, labels = train_batch
+            mask_label,gender_label, age_label = MaskBaseDataset.decode_multi_class(labels)
+            
             inputs = inputs.to(device)
-            labels = labels.to(device)
+            age_label,mask_label,gender_label = torch.tensor(age_label).to(device),torch.tensor(mask_label).to(device),torch.tensor(gender_label).to(device)
 
             optimizer.zero_grad()
 
-            outs = model(inputs)
-            preds = torch.argmax(outs, dim=-1)
 
-            loss = criterion(outs, labels)
 
+            outs_age,outs_mask,outs_gender = model(inputs)
+            preds_age,preds_mask,preds_gender = torch.argmax(outs_age, dim=-1),torch.argmax(outs_mask, dim=-1),torch.argmax(outs_gender, dim=-1)
+
+            loss_age = criterion_age(outs_age, age_label)
+            loss_mask = criterion_mask(outs_mask, mask_label)
+            loss_gender = criterion_gender(outs_gender, gender_label)
+            loss = loss_mask + loss_age + loss_gender
+            
+
+            
             loss.backward()
             optimizer.step()
             
-            loss_value += loss.item()
-            matches += (preds == labels).sum().item()
-            train_accloss = AccuracyLoss(labels, preds, outs, criterion)
-            # WandB - Log training metrics
-            wandb.log({
-                'train_loss': loss_value / args.log_interval,
-                'train_accuracy': matches / args.batch_size / args.log_interval,
-                'current_lr': get_lr(optimizer),
-                'age_label_0': labels[0].tolist(),  # 나이 라벨 0
-                'age_label_1': labels[1].tolist(),  # 나이 라벨 1
-                'age_label_2': labels[2].tolist(),  # 나이 라벨 2
-                    })
-
+            
+            
+            loss_val_age += loss_age.item()
+            loss_val_mask += loss_mask.item()
+            loss_val_gender += loss_gender.item()
+            correct_predictions = (preds_age == age_label) & (preds_mask == mask_label) & (preds_gender == gender_label)
+            matches += correct_predictions.sum().item()
             if (idx + 1) % args.log_interval == 0:
-                train_loss = loss_value / args.log_interval
+                train_loss_age = loss_val_age / args.log_interval
+                train_loss_mask = loss_val_mask / args.log_interval
+                train_loss_gender = loss_val_gender / args.log_interval
                 train_acc = matches / args.batch_size / args.log_interval
                 current_lr = get_lr(optimizer)
-                train_loss_dict, train_acc_dict = train_accloss.loss_acc(args.log_interval, 1)
+                
 
                 print(
                     f"Epoch[{epoch}/{args.epochs}]({idx + 1}/{len(train_loader)}) || "
-                    f"training total loss {train_loss:4.4} || training total accuracy {train_acc:4.2%} || lr {current_lr}"
+                    f"training age loss {train_loss_age:4.4} ||training mask loss {train_loss_mask:4.4} || training gender loss {train_loss_gender:4.4} || training accuracy {train_acc:4.2%} ||"
+                    f"Current age lr {current_lr} "
                 )
-                print(
-                    f"training mask loss {train_loss_dict['mask_wear_loss']:4.4}, {train_loss_dict['mask_incorrect_loss']:4.4}, {train_loss_dict['mask_not_wear_loss']:4.4} || training mask accuracy {train_acc_dict['mask_wear_acc']:4.4%}, {train_acc_dict['mask_incorrect_acc']:4.4%}, {train_acc_dict['mask_not_wear_acc']:4.4%}\n"
-                    f"training gender loss {train_loss_dict['male_loss']:4.4}, {train_loss_dict['female_loss']:4.4} || training gender accuracy {train_acc_dict['mask_not_wear_acc']:4.4%}, {train_acc_dict['female_acc'] :4.4%}\n"
-                    f"training age loss {train_loss_dict['age_0_30_loss']:4.4}, {train_loss_dict['age_30_60_loss']:4.4}, {train_loss_dict['age_60_loss']:4.4} || training age accuracy {train_acc_dict['age_0_30_acc']:4.4%}, {train_acc_dict['age_30_60_acc']:4.4%}, {train_acc_dict['age_60_acc']:4.4%}\n"
-                )
-
                 logger.add_scalar(
-                    "Train/loss", train_loss, epoch * len(train_loader) + idx
+                    "Train/loss", train_loss_age, epoch * len(train_loader) + idx
                 )
                 logger.add_scalar(
                     "Train/accuracy", train_acc, epoch * len(train_loader) + idx
                 )
 
-                # for key, value in train_loss_dict.items():
-                #     logger.add_scalar(
-                #         "Train_cls/"+key, value, epoch * len(train_loader) + idx
-                #     )
-                # for key, value in train_acc_dict.items():
-                #     logger.add_scalar(
-                #         "Train_cls/"+key, value, epoch * len(train_loader) + idx
-                #     )
-
-                logger.add_scalars('Train_cls/Mask Loss', dict(OrderedDict(list(train_loss_dict.items())[:3])), epoch * len(train_loader) + idx)
-                logger.add_scalars('Train_cls/Gender Loss', dict(OrderedDict(list(train_loss_dict.items())[3:5])), epoch * len(train_loader) + idx)
-                logger.add_scalars('Train_cls/Age Loss', dict(OrderedDict(list(train_loss_dict.items())[5:])), epoch * len(train_loader) + idx)
-                logger.add_scalars('Train_cls/Mask Accuracy', dict(OrderedDict(list(train_acc_dict.items())[:3])), epoch * len(train_loader) + idx)
-                logger.add_scalars('Train_cls/Gender Accuracy', dict(OrderedDict(list(train_acc_dict.items())[3:5])), epoch * len(train_loader) + idx)
-                logger.add_scalars('Train_cls/Age Accuracy', dict(OrderedDict(list(train_acc_dict.items())[5:])), epoch * len(train_loader) + idx)
-
-                loss_value = 0
+                loss_val_age =0
+                loss_val_mask=0
+                loss_val_gender=0
                 matches = 0
-
-                # WandB - Log training metrics
-                wandb.log({
-                'train_acc_mask_wear': train_acc_dict['mask_wear_acc'],
-                'train_acc_mask_incorrect': train_acc_dict['mask_incorrect_acc'],
-                'train_acc_mask_not_wear': train_acc_dict['mask_not_wear_acc'],
-    
-                'train_acc_male': train_acc_dict['male_acc'],
-                'train_acc_female': train_acc_dict['female_acc'],
-    
-                'train_acc_age_0_30': train_acc_dict['age_0_30_acc'],
-                'train_acc_age_30_60': train_acc_dict['age_30_60_acc'],
-                'train_acc_age_60': train_acc_dict['age_60_acc'],
-                })
 
         scheduler.step()
 
@@ -288,55 +257,37 @@ def train(data_dir, model_dir, args):
         with torch.no_grad():
             print("Calculating validation results...")
             model.eval()
-            val_loss_items = []
+            val_loss_items_age = []
+            val_loss_items_mask = []
+            val_loss_items_gender = []
             val_acc_items = []
+            val_acc_items_age = []
             figure = None
-            val_loss_dict = {
-                'mask_wear_loss' : 0,
-                'mask_incorrect_loss' : 0,
-                'mask_not_wear_loss' : 0,
-                'male_loss' : 0,
-                'female_loss' : 0,
-                'age_0_30_loss' : 0,
-                'age_30_60_loss' : 0,
-                'age_60_loss' : 0,
-            }
-            val_acc_dict = {
-                'mask_wear_acc' : 0,
-                'mask_incorrect_acc' : 0,
-                'mask_not_wear_acc' : 0,
-                'male_acc' : 0,
-                'female_acc' : 0,
-                'age_0_30_acc' : 0,
-                'age_30_60_acc' : 0,
-                'age_60_acc' : 0,
-            }
             for val_batch in val_loader:
                 inputs, labels = val_batch
-                inputs = inputs.to(device)
-                labels = labels.to(device)
-
-                outs = model(inputs)
-                preds = torch.argmax(outs, dim=-1)
+                mask_label,gender_label, age_label = MaskBaseDataset.decode_multi_class(labels)
                 
-                loss_item = criterion(outs, labels).item()
-                acc_item = (labels == preds).sum().item()
-                val_loss_items.append(loss_item)
+                inputs = inputs.to(device)
+                age_label,mask_label,gender_label = torch.tensor(age_label).to(device),torch.tensor(mask_label).to(device),torch.tensor(gender_label).to(device)
+
+                outs_age,outs_mask,outs_gender = model(inputs)
+                preds_age,preds_mask,preds_gender = torch.argmax(outs_age, dim=-1),torch.argmax(outs_mask, dim=-1),torch.argmax(outs_gender, dim=-1)
+                
+                loss_item_age, loss_item_mask, loss_item_gender = criterion_age(outs_age, age_label).item(),criterion_mask(outs_mask, mask_label).item(),criterion_gender(outs_gender, gender_label).item()
+                acc=(age_label==preds_age) & (mask_label==preds_mask) & (gender_label==preds_gender)
+                acc_item = acc.sum().item()
+                acc_age=(age_label==preds_age)
+                acc_item_age=acc_age.sum().item()
+                
+                val_loss_items_age.append(loss_item_age)
+                val_loss_items_mask.append(loss_item_mask)
+                val_loss_items_gender.append(loss_item_gender)
                 val_acc_items.append(acc_item)
+                val_acc_items_age.append(acc_item_age)
+                
+                
 
-                val_accloss = AccuracyLoss(labels, preds, outs, criterion)
-                val_loss_cls, val_acc_cls = val_accloss.loss_acc(len(val_set), len(val_loader))
-                for key, value in val_loss_cls.items():
-                    val_loss_dict[key] += value
-                for key, value in val_acc_cls.items():
-                    val_acc_dict[key] += value
-
-                # WandB - Log validation metrics
-                wandb.log({
-                    'val_loss': np.sum(val_loss_items) / len(val_loader),
-                    'val_accuracy': np.sum(val_acc_items) / len(val_set),
-                    # Add more metrics as needed
-                })
+                preds=MaskBaseDataset.encode_multi_class(preds_mask,preds_gender,preds_age)
 
                 if figure is None:
                     inputs_np = (
@@ -353,9 +304,15 @@ def train(data_dir, model_dir, args):
                         shuffle=args.dataset != "MaskSplitByProfileDataset",
                     )
 
-            val_loss = np.sum(val_loss_items) / len(val_loader)
+            val_loss_age = np.sum(val_loss_items_age) / len(val_loader)
+            val_loss_mask = np.sum(val_loss_items_mask) / len(val_loader)
+            val_loss_gender = np.sum(val_loss_items_gender) / len(val_loader)
+            
+            val_loss = loss_mask + loss_age + loss_gender
+            
             val_acc = np.sum(val_acc_items) / len(val_set)
-            best_val_loss = min(best_val_loss, val_loss)
+            val_acc_age = np.sum(val_acc_items_age) / len(val_set)
+            best_val_loss = min(best_val_loss, (val_loss_age+val_loss_mask+val_loss_gender)/3)
             if val_acc > best_val_acc:
                 best_epoch = epoch
                 print(
@@ -366,68 +323,43 @@ def train(data_dir, model_dir, args):
                         'epoch': epoch,
                         'model_state_dict': model.module.state_dict(),
                         'optimizer_state_dict': optimizer.state_dict(),
-                        'loss': val_loss,
                         'accuracy': val_acc,
                     }
                     , f"{save_dir}/best.pth")
                 best_val_acc = val_acc
-            torch.save(
-                    {
-                        'epoch': epoch,
-                        'model_state_dict': model.module.state_dict(),
-                        'optimizer_state_dict': optimizer.state_dict(),
-                        'loss': val_loss,
-                        'accuracy': val_acc,
-                    }
-                    , f"{save_dir}/last.pth")
-            
-            if val_acc_dict['age_60_acc'] > best_val_age60_acc:
-                best_epoch_age60 = epoch
-                best_val_age60_acc = val_acc_dict['age_60_acc']
+            if val_acc_age > best_val_age_acc:
+                best_epoch_age = epoch
                 torch.save(
                     {
                         'epoch': epoch,
                         'model_state_dict': model.module.state_dict(),
                         'optimizer_state_dict': optimizer.state_dict(),
-                        'loss': val_loss,
                         'accuracy': val_acc,
                     }
-                    , f"{save_dir}/best_age60.pth")
-
+                    , f"{save_dir}/best_age.pth")
+                best_val_age_acc = val_acc_age
+            torch.save(
+                    {
+                        'epoch': epoch,
+                        'model_state_dict': model.module.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'accuracy': val_acc,
+                    }
+                    , f"{save_dir}/last.pth")
 
             print(
-                f"[Val] acc : {val_acc:4.2%}, loss: {val_loss:4.2} || "
+                f"[Val] acc : {val_acc:4.2%}, age loss: {val_loss_age:4.2} || val loss: {val_loss_mask:4.2} || gender loss: {val_loss_gender:4.2} "
                 f"best acc : {best_val_acc:4.2%}, best loss: {best_val_loss:4.2}"
             )
-            print(
-                f"[Val] mask loss {val_loss_dict['mask_wear_loss']:4.2}, {val_loss_dict['mask_incorrect_loss']:4.2}, {val_loss_dict['mask_not_wear_loss']:4.4} || training mask accuracy {val_acc_dict['mask_wear_acc']:4.2%}, {val_acc_dict['mask_incorrect_acc']:4.2%}, {val_acc_dict['mask_not_wear_acc']:4.2%}\n"
-                f"[Val] gender loss {val_loss_dict['male_loss']:4.2}, {val_loss_dict['female_loss']:4.2} || training gender accuracy {val_acc_dict['mask_not_wear_acc']:4.2%}, {val_acc_dict['female_acc']:4.2%}\n"
-                f"[Val] age loss {val_loss_dict['age_0_30_loss']:4.2}, {val_loss_dict['age_30_60_loss']:4.2}, {val_loss_dict['age_60_loss']:4.2} || training age accuracy {val_acc_dict['age_0_30_acc']:4.2%}, {val_acc_dict['age_30_60_acc']:4.2%}, {val_acc_dict['age_60_acc']:4.2%}\n"
-            )
-            
             logger.add_scalar("Val/loss", val_loss, epoch)
             logger.add_scalar("Val/accuracy", val_acc, epoch)
             logger.add_figure("results", figure, epoch)
-
-            # for key, value in val_loss_dict.items():
-            #         logger.add_scalar("Val_cls/"+key, value, epoch)
-            # for key, value in val_acc_dict.items():
-            #     logger.add_scalar("Val_cls/"+key, value, epoch)
-
-            logger.add_scalars('Val_cls/Mask Loss', dict(OrderedDict(list(val_loss_dict.items())[:3])), epoch * len(train_loader) + idx)
-            logger.add_scalars('Val_cls/Gender Loss', dict(OrderedDict(list(val_loss_dict.items())[3:5])), epoch * len(train_loader) + idx)
-            logger.add_scalars('Val_cls/Age Loss', dict(OrderedDict(list(val_loss_dict.items())[5:])), epoch * len(train_loader) + idx)
-            logger.add_scalars('Val_cls/Mask Accuracy', dict(OrderedDict(list(val_acc_dict.items())[:3])), epoch * len(train_loader) + idx)
-            logger.add_scalars('Val_cls/Gender Accuracy', dict(OrderedDict(list(val_acc_dict.items())[3:5])), epoch * len(train_loader) + idx)
-            logger.add_scalars('Val_cls/Age Accuracy', dict(OrderedDict(list(val_acc_dict.items())[5:])), epoch * len(train_loader) + idx)
-
-
             print()
 
     ################## 
     os.rename(f"{save_dir}/best.pth",f"{save_dir}/best_epoch{best_epoch:03d}.pth")
     os.rename(f"{save_dir}/last.pth",f"{save_dir}/last_epoch{args.epochs-1:03d}.pth")
-    os.rename(f"{save_dir}/best_age60.pth",f"{save_dir}/best_age60_epoch{best_epoch_age60:03d}.pth")
+    os.rename(f"{save_dir}/best_age.pth",f"{save_dir}/best_age_epoch{best_epoch_age:03d}.pth")
     ##################
 
 if __name__ == "__main__":
@@ -441,7 +373,7 @@ if __name__ == "__main__":
         "--seed", type=int, default=42, help="random seed (default: 42)"
     )
     parser.add_argument(
-        "--epochs", type=int, default=1, help="number of epochs to train (default: 1)"
+        "--epochs", type=int, default=10, help="number of epochs to train (default: 10)"
     )
     parser.add_argument(
         "--dataset",
@@ -475,13 +407,13 @@ if __name__ == "__main__":
         help="input batch size for validing (default: 1000)",
     )
     parser.add_argument(
-        "--model", type=str, default="VITmodel", help="model type (BaseModel,ConvNextModel,VITmodel) "
+        "--model", type=str, default="BaseModel", help="model type (default: BaseModel)"
     )
     parser.add_argument(
-        "--optimizer", type=str, default="AdamW", help="optimizer type (default: AdamW)"
+        "--optimizer", type=str, default="SGD", help="optimizer type (default: SGD)"
     )
     parser.add_argument(
-        "--lr", type=float, default=1e-4, help="learning rate (default: 1e-3)"
+        "--lr", type=float, default=1e-3, help="learning rate (default: 1e-3)"
     )
     parser.add_argument(
         "--val_ratio",
@@ -490,10 +422,22 @@ if __name__ == "__main__":
         help="ratio for validaton (default: 0.2)",
     )
     parser.add_argument(
-        "--criterion",
+        "--criterion_age",
         type=str,
-        default="focal",
-        help="criterion type (cross_entropy, focal, label_smoothing, f1)",
+        default="cross_entropy",
+        help="criterion type for age(default: cross_entropy)",
+    )
+    parser.add_argument(
+        "--criterion_mask",
+        type=str,
+        default="cross_entropy",
+        help="criterion type for mask(default: cross_entropy)",
+    )
+    parser.add_argument(
+        "--criterion_gender",
+        type=str,
+        default="cross_entropy",
+        help="criterion type for gender(default: cross_entropy)",
     )
     parser.add_argument(
         "--lr_decay_step",
@@ -515,39 +459,16 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data_dir",
         type=str,
-        default=os.environ.get("SM_CHANNEL_TRAIN", "../data/train/images"),
+        default=os.environ.get("SM_CHANNEL_TRAIN", "../../../train/images"),
     )
     parser.add_argument(
-        "--model_dir", type=str, default=os.environ.get("SM_MODEL_DIR", "../model")
+        "--model_dir", type=str, default=os.environ.get("SM_MODEL_DIR", "./model")
     )
-    # stratified kfold
-    parser.add_argument(
-        "--use_stratified_kfold", # 쓸건지. 그냥--use_stratified_kfold 쓰면 써짐
-        action="store_true",
-        help="Use Stratified K-Fold for dataset splitting",
-    )
-    parser.add_argument(
-        "--num_splits", # fold 개수
-        type=int,
-        default=5,
-        help="Number of splits for Stratified K-Fold",
-    )
-    parser.add_argument(
-        "--current_fold", #현재 몇번째 fold 사용할지 
-        type=int,
-        default=0,
-        help="Current fold to use in Stratified K-Fold",
-    )
-
 
     args = parser.parse_args()
     print(args)
-    
-    # WandB - Log configuration
-    wandb.config.update(args)
 
     data_dir = args.data_dir
     model_dir = args.model_dir
-    # vit_model = VITmodel(num_classes=args.num_classes) # VIT numclass 자꾸 못갖고오는것같아서 추가
 
     train(data_dir, model_dir, args)
