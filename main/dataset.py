@@ -497,7 +497,7 @@ class CustomAugmentation_for_Oversampling:
         return self.transform(image)
 
 
-class OversamplingMaskDataset(MaskBaseDataset):
+class OversamplingMaskDataset(MaskSplitByProfileDataset):
     def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2, oversample_ratio=0.3):
         super().__init__(data_dir, mean, std, val_ratio)
 
