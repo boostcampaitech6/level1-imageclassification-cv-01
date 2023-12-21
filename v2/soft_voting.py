@@ -77,7 +77,7 @@ def voting(data_dir, model_dir, output_dir, args):
     # 이미지 경로를 리스트로 생성한다.
     img_paths = [os.path.join(img_root, img_id) for img_id in info.ImageID]
     dataset_1 = TestDataset(img_paths, args.resize[:2])
-    dataset_2 = TestDataset(img_paths, args.resize[2:4])
+    dataset_2 = TestDataset(img_paths, args.resize[2:4], mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246))
     dataset_3 = TestDataset(img_paths, args.resize[4:])
 
     loader_1 = torch.utils.data.DataLoader(
@@ -135,7 +135,7 @@ def voting(data_dir, model_dir, output_dir, args):
             sp_2 = softmax(pred_2)                       
             sp_3 = softmax(pred_3)
 
-            pred = sp_1 * 0.4 + sp_2 * 0.3 + sp_3 * 0.3
+            pred = sp_1 * 0.45 + sp_2 * 0.35 + sp_3 * 0.2
             pred = pred.argmax(dim=-1)
 
             preds.extend(pred.cpu().numpy())
