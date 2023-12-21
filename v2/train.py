@@ -7,6 +7,8 @@ import random
 import re
 from importlib import import_module
 from pathlib import Path
+from timm.data.mixup import Mixup
+from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -110,7 +112,6 @@ def train(data_dir, model_dir, args):
         data_dir=data_dir,
     )
     num_classes = dataset.num_classes  # 18
-
     # -- augmentation
     transform_module = getattr(
         import_module("dataset"), args.augmentation
@@ -121,6 +122,16 @@ def train(data_dir, model_dir, args):
         std=dataset.std,
     )
     dataset.set_transform(transform)
+    
+    #mixup
+    mixup_fn = None
+    mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
+    if mixup_active:
+        #print("Mixup is activated!")
+        mixup_fn = Mixup(
+                mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
+                prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
+                label_smoothing=args.label_smoothing, num_classes=num_classes)
 
     # -- data_loader
     train_set, val_set = dataset.split_dataset()
@@ -154,7 +165,14 @@ def train(data_dir, model_dir, args):
     model = torch.nn.DataParallel(model)
         
     # -- loss & metric
-    criterion = create_criterion(args.criterion)  # default: cross_entropy
+    mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
+    if mixup_active:
+        # smoothing is handled with mixup label transform
+        criterion = SoftTargetCrossEntropy()
+    elif args.label_smoothing > 0.:
+        criterion = LabelSmoothingCrossEntropy(smoothing=args.label_smoothing)
+    else:
+        criterion = create_criterion(args.criterion)
     opt_module = getattr(import_module("torch.optim"), args.optimizer)  # default: SGD
     optimizer = opt_module(
         filter(lambda p: p.requires_grad, model.parameters()),
@@ -187,59 +205,78 @@ def train(data_dir, model_dir, args):
     
     
     for epoch in range(start_epoch, args.epochs):
+        torch.cuda.empty_cache()
         # train loop
         model.train()
         loss_value = 0
         matches = 0
         for idx, train_batch in enumerate(train_loader):
             inputs, labels = train_batch
+
             inputs = inputs.to(device)
             labels = labels.to(device)
+            
+            if mixup_fn is not None:
+                inputs, labels = mixup_fn(inputs, labels)
+                
 
             optimizer.zero_grad()
 
             outs = model(inputs)
             preds = torch.argmax(outs, dim=-1)
-
+            
             loss = criterion(outs, labels)
 
             loss.backward()
             optimizer.step()
             
             loss_value += loss.item()
-            matches += (preds == labels).sum().item()
-            train_accloss = AccuracyLoss(labels, preds, outs, criterion)
+
+            if mixup_fn is None:
+                matches += (preds == labels).sum().item()
+                train_accloss = AccuracyLoss(labels, preds, outs, criterion)
+
+                
             if (idx + 1) % args.log_interval == 0:
                 train_loss = loss_value / args.log_interval
-                train_acc = matches / args.batch_size / args.log_interval
                 current_lr = get_lr(optimizer)
-                train_loss_dict, train_acc_dict = train_accloss.loss_acc(args.log_interval, 1)
-
-                print(
-                    f"Epoch[{epoch}/{args.epochs}]({idx + 1}/{len(train_loader)}) || "
-                    f"training total loss {train_loss:4.4} || training total accuracy {train_acc:4.2%} || lr {current_lr}"
-                )
-                print(
-                    f"training mask loss {train_loss_dict['mask_wear_loss']:4.4}, {train_loss_dict['mask_incorrect_loss']:4.4}, {train_loss_dict['mask_not_wear_loss']:4.4} || training mask accuracy {train_acc_dict['mask_wear_acc']:4.4%}, {train_acc_dict['mask_incorrect_acc']:4.4%}, {train_acc_dict['mask_not_wear_acc']:4.4%}\n"
-                    f"training gender loss {train_loss_dict['male_loss']:4.4}, {train_loss_dict['female_loss']:4.4} || training gender accuracy {train_acc_dict['mask_not_wear_acc']:4.4%}, {train_acc_dict['female_acc'] :4.4%}\n"
-                    f"training age loss {train_loss_dict['age_0_30_loss']:4.4}, {train_loss_dict['age_30_60_loss']:4.4}, {train_loss_dict['age_60_loss']:4.4} || training age accuracy {train_acc_dict['age_0_30_acc']:4.4%}, {train_acc_dict['age_30_60_acc']:4.4%}, {train_acc_dict['age_60_acc']:4.4%}\n"
-                )
+                
+                if  mixup_fn is not None:
+                    print(
+                        f"Epoch[{epoch}/{args.epochs}]({idx + 1}/{len(train_loader)}) || "
+                        f"training total loss {train_loss:4.4} || lr {current_lr}"
+                    )                    
+                    
+                else:
+                    train_acc = matches / args.batch_size / args.log_interval
+                    train_loss_dict, train_acc_dict = train_accloss.loss_acc(args.log_interval, 1)
+                    print(
+                        f"Epoch[{epoch}/{args.epochs}]({idx + 1}/{len(train_loader)}) || "
+                        f"training total loss {train_loss:4.4} || training total accuracy {train_acc:4.2%} || lr {current_lr}"
+                    )
+                    
+                    print(
+                        f"training mask loss {train_loss_dict['mask_wear_loss']:4.4}, {train_loss_dict['mask_incorrect_loss']:4.4}, {train_loss_dict['mask_not_wear_loss']:4.4} || training mask accuracy {train_acc_dict['mask_wear_acc']:4.4%}, {train_acc_dict['mask_incorrect_acc']:4.4%}, {train_acc_dict['mask_not_wear_acc']:4.4%}\n"
+                        f"training gender loss {train_loss_dict['male_loss']:4.4}, {train_loss_dict['female_loss']:4.4} || training gender accuracy {train_acc_dict['mask_not_wear_acc']:4.4%}, {train_acc_dict['female_acc'] :4.4%}\n"
+                        f"training age loss {train_loss_dict['age_0_30_loss']:4.4}, {train_loss_dict['age_30_60_loss']:4.4}, {train_loss_dict['age_60_loss']:4.4} || training age accuracy {train_acc_dict['age_0_30_acc']:4.4%}, {train_acc_dict['age_30_60_acc']:4.4%}, {train_acc_dict['age_60_acc']:4.4%}\n"
+                    )
+                    logger.add_scalar(
+                    "Train/accuracy", train_acc, epoch * len(train_loader) + idx
+                    )
 
                 logger.add_scalar(
                     "Train/loss", train_loss, epoch * len(train_loader) + idx
                 )
-                logger.add_scalar(
-                    "Train/accuracy", train_acc, epoch * len(train_loader) + idx
-                )
 
-                # for key, value in train_loss_dict.items():
-                #     logger.add_scalar(
-                #         "Train_cls/"+key, value, epoch * len(train_loader) + idx
-                #     )
-                # for key, value in train_acc_dict.items():
-                #     logger.add_scalar(
-                #         "Train_cls/"+key, value, epoch * len(train_loader) + idx
-                #     )
+                if mixup_fn is None:
+                    for key, value in train_loss_dict.items():
+                        logger.add_scalar(
+                            "Train_cls/"+key, value, epoch * len(train_loader) + idx
+                        )
+                    for key, value in train_acc_dict.items():
+                        logger.add_scalar(
+                            "Train_cls/"+key, value, epoch * len(train_loader) + idx
+                        )
 
                 logger.add_scalars('Train_cls/Mask Loss', dict(OrderedDict(list(train_loss_dict.items())[:3])), epoch * len(train_loader) + idx)
                 logger.add_scalars('Train_cls/Gender Loss', dict(OrderedDict(list(train_loss_dict.items())[3:5])), epoch * len(train_loader) + idx)
@@ -260,6 +297,7 @@ def train(data_dir, model_dir, args):
             val_loss_items = []
             val_acc_items = []
             figure = None
+            
             val_loss_dict = {
                 'mask_wear_loss' : 0,
                 'mask_incorrect_loss' : 0,
@@ -299,7 +337,7 @@ def train(data_dir, model_dir, args):
 
                 outs = model(inputs)
                 preds = torch.argmax(outs, dim=-1)
-                
+                criterion = create_criterion(args.criterion)
                 loss_item = criterion(outs, labels).item()
                 acc_item = (labels == preds).sum().item()
                 val_loss_items.append(loss_item)
@@ -312,11 +350,18 @@ def train(data_dir, model_dir, args):
                 for key, value in val_acc_cls.items():
                     val_acc_dict[key] += value
 
+
+                val_accloss = AccuracyLoss(labels, preds, outs, criterion)
+                val_loss_cls, val_acc_cls = val_accloss.loss_acc(len(val_loader), len(val_loader))
+                for key, value in val_loss_cls.items():
+                    val_loss_dict[key] += value
+                for key, value in val_acc_cls.items():
+                    val_acc_dict[key] += value
+
                 last_acc = AgeBoundaryAcc(labels,preds,ages)
                 last_acc = last_acc.cal_acc(len(val_loader))
                 for key, value in last_acc.items():
                     acc_dict[key] += value
-
 
                 if figure is None:
                     inputs_np = (
@@ -430,7 +475,7 @@ if __name__ == "__main__":
         "--seed", type=int, default=42, help="random seed (default: 42)"
     )
     parser.add_argument(
-        "--epochs", type=int, default=1, help="number of epochs to train (default: 1)"
+        "--epochs", type=int, default=10, help="number of epochs to train (default: 10)"
     )
     parser.add_argument(
         "--dataset",
@@ -448,7 +493,7 @@ if __name__ == "__main__":
         "--resize",
         nargs=2,
         type=int,
-        default=[128, 96],
+        default=[236,236],#[128, 96],
         help="resize size for image when training",
     )
     parser.add_argument(
@@ -481,8 +526,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--criterion",
         type=str,
-        default="cross_entropy",
-        help="criterion type (default: cross_entropy)",
+        default="f1",
+        help="criterion type (default: f1)",
     )
     parser.add_argument(
         "--lr_decay_step",
@@ -504,11 +549,25 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data_dir",
         type=str,
-        default=os.environ.get("SM_CHANNEL_TRAIN", "../data/train/images"),
+        default=os.environ.get("SM_CHANNEL_TRAIN", "../../../train/images"),
     )
     parser.add_argument(
-        "--model_dir", type=str, default=os.environ.get("SM_MODEL_DIR", "../model")
+        "--model_dir", type=str, default=os.environ.get("SM_MODEL_DIR", "./model")
     )
+    
+    parser.add_argument('--mixup', type=float, default=0,
+                        help='mixup alpha, mixup enabled if > 0.')
+    parser.add_argument('--cutmix', type=float, default=0,
+                        help='cutmix alpha, cutmix enabled if > 0.')
+    parser.add_argument('--cutmix_minmax', type=float, nargs='+', default=None,
+                        help='cutmix min/max ratio, overrides alpha and enables cutmix if set (default: None)')
+    parser.add_argument('--mixup_prob', type=float, default=1.0,
+                        help='Probability of performing mixup or cutmix when either/both is enabled')
+    parser.add_argument('--mixup_switch_prob', type=float, default=0.5,
+                        help='Probability of switching to cutmix when both mixup and cutmix enabled')
+    parser.add_argument('--mixup_mode', type=str, default='batch',
+                        help='How to apply mixup/cutmix params. Per "batch", "pair", or "elem"')
+    parser.add_argument('--label_smoothing', type=float, default=0.0)
 
     args = parser.parse_args()
     print(args)

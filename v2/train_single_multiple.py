@@ -152,6 +152,7 @@ def train(data_dir, model_dir, args):
     model = torch.nn.DataParallel(model)
         
     # -- loss & metric
+
     criterion_age = create_criterion(args.criterion_age)  # default: cross_entropy
     criterion_mask = create_criterion(args.criterion_mask) # f1을 쓸 경우 class argument 추가
     criterion_gender = create_criterion(args.criterion_gender)

@@ -27,7 +27,7 @@ class FocalLoss(nn.Module):
 # Label Smoothing Loss 구현
 # 모델이 너무 자신만만하게 예측하는 것을 방지하기 위해 사용된다.
 class LabelSmoothingLoss(nn.Module):
-    def __init__(self, classes=18, smoothing=0.0, dim=-1):
+    def __init__(self, classes=3, smoothing=0.0, dim=-1):
         super(LabelSmoothingLoss, self).__init__()
         self.confidence = 1.0 - smoothing
         self.smoothing = smoothing
@@ -35,9 +35,6 @@ class LabelSmoothingLoss(nn.Module):
         self.dim = dim
 
     def forward(self, pred, target):
-        if pred.ndim == 1:
-            pred = pred.unsqueeze(0)
-            target = target.unsqueeze(0)
         pred = pred.log_softmax(dim=self.dim)
         with torch.no_grad():
             true_dist = torch.zeros_like(pred)
