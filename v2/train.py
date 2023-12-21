@@ -18,7 +18,7 @@ from torch.utils.tensorboard import SummaryWriter
 from dataset import MaskBaseDataset
 from loss import create_criterion
 
-from accuracy_loss_print import AccuracyLoss
+from accuracy_loss_print import AccuracyLoss, AgeBoundaryAcc
 from collections import OrderedDict
 
 
@@ -124,14 +124,19 @@ def train(data_dir, model_dir, args):
 
     # -- data_loader
     train_set, val_set = dataset.split_dataset()
+    weights=dataset.weights
+    sample_weights=[weights[train_set[i][1]] for i in range(len(train_set))]
+    print(len(sample_weights))
+    sampler = torch.utils.data.sampler.WeightedRandomSampler(sample_weights, 9000,replacement=True)
 
     train_loader = DataLoader(
         train_set,
         batch_size=args.batch_size,
         num_workers=multiprocessing.cpu_count() // 2,
-        shuffle=True,
+        # shuffle=True,
         pin_memory=use_cuda,
         drop_last=True,
+        sampler=sampler,
     )
 
     val_loader = DataLoader(
@@ -275,10 +280,22 @@ def train(data_dir, model_dir, args):
                 'age_30_60_acc' : 0,
                 'age_60_acc' : 0,
             }
-            for val_batch in val_loader:
+            acc_dict = {
+            'late_20s_acc' : 0,
+            'late_20s_MIDDLE' : 0,
+            'late_50s_acc' : 0,
+            'late_50s_OLD' : 0,
+            'age_60s_acc' : 0,
+            'age_60s_MIDDLE' : 0,
+
+            }
+        
+            for val_batch,indices in zip(val_loader, val_loader.batch_sampler):
                 inputs, labels = val_batch
                 inputs = inputs.to(device)
                 labels = labels.to(device)
+
+                ages = [dataset.age[i] for i in indices]
 
                 outs = model(inputs)
                 preds = torch.argmax(outs, dim=-1)
@@ -294,6 +311,12 @@ def train(data_dir, model_dir, args):
                     val_loss_dict[key] += value
                 for key, value in val_acc_cls.items():
                     val_acc_dict[key] += value
+
+                last_acc = AgeBoundaryAcc(labels,preds,ages)
+                last_acc = last_acc.cal_acc(len(val_loader))
+                for key, value in last_acc.items():
+                    acc_dict[key] += value
+
 
                 if figure is None:
                     inputs_np = (
@@ -354,12 +377,17 @@ def train(data_dir, model_dir, args):
 
             print(
                 f"[Val] acc : {val_acc:4.2%}, loss: {val_loss:4.2} || "
-                f"best acc : {best_val_acc:4.2%}, best loss: {best_val_loss:4.2}"
+                f"best acc : {best_val_acc:4.2%}, best loss: {best_val_loss:4.2}\n"
             )
             print(
                 f"[Val] mask loss {val_loss_dict['mask_wear_loss']:4.2}, {val_loss_dict['mask_incorrect_loss']:4.2}, {val_loss_dict['mask_not_wear_loss']:4.4} || training mask accuracy {val_acc_dict['mask_wear_acc']:4.2%}, {val_acc_dict['mask_incorrect_acc']:4.2%}, {val_acc_dict['mask_not_wear_acc']:4.2%}\n"
                 f"[Val] gender loss {val_loss_dict['male_loss']:4.2}, {val_loss_dict['female_loss']:4.2} || training gender accuracy {val_acc_dict['mask_not_wear_acc']:4.2%}, {val_acc_dict['female_acc']:4.2%}\n"
                 f"[Val] age loss {val_loss_dict['age_0_30_loss']:4.2}, {val_loss_dict['age_30_60_loss']:4.2}, {val_loss_dict['age_60_loss']:4.2} || training age accuracy {val_acc_dict['age_0_30_acc']:4.2%}, {val_acc_dict['age_30_60_acc']:4.2%}, {val_acc_dict['age_60_acc']:4.2%}\n"
+            )
+            print(
+                f"[Val] Late 20s YOUNG  {acc_dict['late_20s_acc']:4.2%} || MIDDLE(Error) {acc_dict['late_20s_MIDDLE']:4.2%}\n"
+                f"[Val] Late 50s MIDDLE {acc_dict['late_50s_acc']:4.2%} || OLD(Error)    {acc_dict['late_50s_OLD']:4.2%}\n"
+                f"[Val] Age  60s OLD    {acc_dict['age_60s_acc']:4.2%} || MIDDLE(Error) {acc_dict['age_60s_MIDDLE']:4.2%}\n"
             )
             
             logger.add_scalar("Val/loss", val_loss, epoch)
@@ -370,6 +398,10 @@ def train(data_dir, model_dir, args):
             #         logger.add_scalar("Val_cls/"+key, value, epoch)
             # for key, value in val_acc_dict.items():
             #     logger.add_scalar("Val_cls/"+key, value, epoch)
+            for key, value in acc_dict.items():
+                if key in ['late_20s_acc','late_50s_acc','age_60s_acc']:
+                    logger.add_scalar("Val_ageboundary/"+key, value, epoch)
+
 
             logger.add_scalars('Val_cls/Mask Loss', dict(OrderedDict(list(val_loss_dict.items())[:3])), epoch * len(train_loader) + idx)
             logger.add_scalars('Val_cls/Gender Loss', dict(OrderedDict(list(val_loss_dict.items())[3:5])), epoch * len(train_loader) + idx)
