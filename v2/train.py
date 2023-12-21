@@ -5,25 +5,27 @@ import multiprocessing
 import os
 import random
 import re
+import wandb
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+
 from importlib import import_module
 from pathlib import Path
 from timm.data.mixup import Mixup
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
-
-import matplotlib.pyplot as plt
-import numpy as np
-import torch
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-
-from dataset import MaskBaseDataset
-from loss import create_criterion
-
-from accuracy_loss_print import AccuracyLoss, AgeBoundaryAcc
 from collections import OrderedDict
 
+from dataset import MaskBaseDataset
+from model import VITmodel # VIT추가
+from loss import create_criterion
+from accuracy_loss_print import AccuracyLoss, AgeBoundaryAcc
 
+# Initialize wandb
+wandb.init(project="project_name", name="exp")
 
 def seed_everything(seed):
     torch.manual_seed(seed)
@@ -104,14 +106,23 @@ def train(data_dir, model_dir, args):
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    # -- dataset
+    # -- dataset : MaskBaseDataset
     dataset_module = getattr(
         import_module("dataset"), args.dataset
-    )  # default: MaskBaseDataset
+    ) 
     dataset = dataset_module(
         data_dir=data_dir,
     )
     num_classes = dataset.num_classes  # 18
+   
+    # stratified_kfold면 
+    if args.use_stratified_kfold:
+        train_set, val_set = dataset.stratified_split_dataset(
+            n_splits=args.num_splits, current_fold=args.current_fold
+        )
+    else:
+        train_set, val_set = dataset.split_dataset()
+
     # -- augmentation
     transform_module = getattr(
         import_module("dataset"), args.augmentation
@@ -144,7 +155,7 @@ def train(data_dir, model_dir, args):
         train_set,
         batch_size=args.batch_size,
         num_workers=multiprocessing.cpu_count() // 2,
-        # shuffle=True,
+        # shuffle=True, # kfold 쓰면 True 해줘야함
         pin_memory=use_cuda,
         drop_last=True,
         sampler=sampler,
@@ -196,6 +207,9 @@ def train(data_dir, model_dir, args):
     best_epoch_age60 = 0
     
     start_epoch = 0
+
+    # WandB - Save hyperparameters
+    wandb.config.update(args)
     
     if args.resume_from:
         model_data = torch.load(args.resume_from)
@@ -219,7 +233,6 @@ def train(data_dir, model_dir, args):
             if mixup_fn is not None:
                 inputs, labels = mixup_fn(inputs, labels)
                 
-
             optimizer.zero_grad()
 
             outs = model(inputs)
@@ -236,6 +249,15 @@ def train(data_dir, model_dir, args):
                 matches += (preds == labels).sum().item()
                 train_accloss = AccuracyLoss(labels, preds, outs, criterion)
 
+            # WandB - Log training metrics
+            wandb.log({
+                'train_loss': loss_value / args.log_interval,
+                'train_accuracy': matches / args.batch_size / args.log_interval,
+                'current_lr': get_lr(optimizer),
+                'age_label_0': labels[0].tolist(),  # 나이 라벨 0
+                'age_label_1': labels[1].tolist(),  # 나이 라벨 1
+                'age_label_2': labels[2].tolist(),  # 나이 라벨 2
+                    })
                 
             if (idx + 1) % args.log_interval == 0:
                 train_loss = loss_value / args.log_interval
@@ -287,6 +309,21 @@ def train(data_dir, model_dir, args):
 
                 loss_value = 0
                 matches = 0
+
+                
+                # WandB - Log training metrics
+                wandb.log({
+                'train_acc_mask_wear': train_acc_dict['mask_wear_acc'],
+                'train_acc_mask_incorrect': train_acc_dict['mask_incorrect_acc'],
+                'train_acc_mask_not_wear': train_acc_dict['mask_not_wear_acc'],
+    
+                'train_acc_male': train_acc_dict['male_acc'],
+                'train_acc_female': train_acc_dict['female_acc'],
+    
+                'train_acc_age_0_30': train_acc_dict['age_0_30_acc'],
+                'train_acc_age_30_60': train_acc_dict['age_30_60_acc'],
+                'train_acc_age_60': train_acc_dict['age_60_acc'],
+                })
 
         scheduler.step()
 
@@ -349,14 +386,13 @@ def train(data_dir, model_dir, args):
                     val_loss_dict[key] += value
                 for key, value in val_acc_cls.items():
                     val_acc_dict[key] += value
-
-
-                val_accloss = AccuracyLoss(labels, preds, outs, criterion)
-                val_loss_cls, val_acc_cls = val_accloss.loss_acc(len(val_loader), len(val_loader))
-                for key, value in val_loss_cls.items():
-                    val_loss_dict[key] += value
-                for key, value in val_acc_cls.items():
-                    val_acc_dict[key] += value
+                
+                # WandB - Log validation metrics
+                wandb.log({
+                    'val_loss': np.sum(val_loss_items) / len(val_loader),
+                    'val_accuracy': np.sum(val_acc_items) / len(val_set),
+                    # Add more metrics as needed
+                })
 
                 last_acc = AgeBoundaryAcc(labels,preds,ages)
                 last_acc = last_acc.cal_acc(len(val_loader))
@@ -554,6 +590,25 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model_dir", type=str, default=os.environ.get("SM_MODEL_DIR", "./model")
     )
+
+    # stratified kfold
+    parser.add_argument(
+        "--use_stratified_kfold", # 쓸건지. 그냥--use_stratified_kfold 쓰면 써짐
+        action="store_true",
+        help="Use Stratified K-Fold for dataset splitting",
+    )
+    parser.add_argument(
+        "--num_splits", # fold 개수
+        type=int,
+        default=5,
+        help="Number of splits for Stratified K-Fold",
+    )
+    parser.add_argument(
+        "--current_fold", #현재 몇번째 fold 사용할지 
+        type=int,
+        default=0,
+        help="Current fold to use in Stratified K-Fold",
+    )
     
     parser.add_argument('--mixup', type=float, default=0,
                         help='mixup alpha, mixup enabled if > 0.')
@@ -571,6 +626,9 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     print(args)
+
+    # WandB - Log configuration
+    wandb.config.update(args)
 
     data_dir = args.data_dir
     model_dir = args.model_dir
