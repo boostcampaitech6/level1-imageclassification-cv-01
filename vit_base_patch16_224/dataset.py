@@ -62,7 +62,8 @@ class BaseAugmentation:
         """
         self.transform = Compose(
             [
-                Resize(resize, Image.BILINEAR),
+                CenterCrop((384, 512)),  # Center crop to maintain the original aspect ratio
+                Resize(resize, Image.BILINEAR), # for patch
                 ToTensor(),
                 Normalize(mean=mean, std=std),
             ]

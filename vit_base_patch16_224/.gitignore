@@ -5,6 +5,13 @@ __pycache__/
 Auto_setup_Yeah_FIXED.sh 
 .vscode
 data
+.github
+vit16_1220_aug1
+vit16_k5_b64
+vit16_k5_b64_aug
+vit16_k10_b64
+wandb
+
 
 
 # C extensions
