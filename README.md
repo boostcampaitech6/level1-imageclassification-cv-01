@@ -1,5 +1,5 @@
 # Level1-Classification Competetion
-🌟**CV-01**조 **Supershy**
+🌟**CV-01**조🌟 **Supershy**
 성주희, 한주희, 정재웅, 김혜지, 류경엽, 임서현
 
 ## Project Structure
