@@ -87,6 +87,41 @@ class BaseAugmentation:
         """
         return self.transform(image)
 
+class BaseAugmentation_efficientNet:
+    """
+    기본적인 Augmentation을 담당하는 클래스
+
+    Attributes:
+        transform (Compose): 이미지를 변환을 위한 torchvision.transforms.Compose 객체
+    """
+
+    def __init__(self, resize, mean, std, **args):
+        """
+        Args:
+            resize (tuple): 이미지의 리사이즈 대상 크지
+            mean (tuple): Normalize 변환을 위한 평균 값
+            std (tuple): Normalize 변환을 위한 표준 값
+        """
+        self.transform = Compose(
+            [
+                Resize(resize, Image.BILINEAR),
+                ToTensor(),
+                Normalize(mean=mean, std=std),
+            ]
+        )
+
+    def __call__(self, image):
+        """
+        이미지에 저장된 transform 적용
+
+        Args:
+            Image (PIL.Image): Augumentation을 적용할 이미지
+
+        Returns:
+            Tensor: Argumentation이 적용된 이미지
+        """
+        return self.transform(image)
+
 
 class AddGaussianNoise(object):
     """이미지에 Gaussian Noise를 추가하는 클래스"""

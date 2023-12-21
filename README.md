@@ -6,14 +6,22 @@
 
 ```
 ${PROJECT}
-├── dataset.py
-├── inference.py
-├── loss.py
-├── model.py
+├── eda
+│   ├── data_eda.ipynb
+├── main
+│   ├── README.md
+│   ├── accuracy_loss_print.py
+│   ├── dataset.py
+│   ├── inference.py
+│   ├── loss.py
+│   ├── model.py
+│   ├── requiremets.txt
+│   ├── train.py
+│   ├── train_single_multiple.py
+│   ├── hard_voting.py
+│   └── soft_voting.py
 ├── README.md
-├── requirements.txt
-├── sample_submission.ipynb
-└── train.py
+└── requiremets.txt
 ```
 
 - dataset.py : This file contains dataset class for model training and validation
@@ -22,7 +30,6 @@ ${PROJECT}
 - model.py : This file defines the model
 - README.md
 - requirements.txt : contains the necessary packages to be installed
-- sample_submission.ipynb : an example notebook for submission
 - train.py : This file used for training the model
 
 ## Code Structure Description 
@@ -70,18 +77,54 @@ pip install -r requirements.txt
 ```
 
 ### Usage
+[Description of all arguments]()
 
 #### Training
 
 To train the model with your custom dataset, set the appropriate directories for the training images and model saving, then run the training script.
+- **single model**
+
 ```
-python train.py --data_dir /path/to/images --model_dir /path/to/model
+python train.py --data_dir /path/to/images --model_dir /path/to/model --model MODEL_NAME
 ```
+
+- **single multiple model**
+
+```
+python train_single_multiple.py --data_dir /path/to/images --model_dir /path/to/model --model MODEL_NAME
+```
+
 
 #### Inference
 
 For generating predictions with a trained model, provide directories for evaluation data, the trained model, and output, then run the inference script.
+- **single model**
 ```
-python inference.py --data_dir /path/to/images --model_dir /path/to/model --output_dir /path/to/model
+python inference.py --data_dir /path/to/images --model_dir /path/to/model --output_dir /path/to/model --model MODEL_NAME
+```
+- **single multiple model**
+```
+python inference.py --data_dir /path/to/images --model_dir /path/to/model --output_dir /path/to/model --model_mode single_multiple --model MODEL_NAME
 ```
 
+#### Ensemble
+- **ensemble (hard voting)**
+```
+python hard_voting.py --file_dir ./csv --csv1 file1.csv --csv2 file2.csv --csv3 file3.csv
+```
+
+- **ensemble (soft voting)**
+```
+python soft_voting.py --models MODEL_NAME1 MODEL_NAME2 MODEL_NAME3 --model_dir ./checkpoint --model_files file1.pth file2.pth file3.pth --data_dir ./data/eval
+```
+
+
+### [Arguments](./docs/arguments.md)
+
+## Model
+- [ConvNext Tiny](./docs/ConvNext.md)
+- [EfficientNet v2 small](./docs/EfficientNet_v2_small.md)
+- [ViT16](./docs/ViT16.md)
+
+## Dataloader
+- [oversampling with data augmentation](./docs/data_sampling.md)
