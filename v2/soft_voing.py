@@ -25,7 +25,7 @@ def load_model(saved_model, num_classes, device, model_name):
     Returns:
         model (nn.Module): 가중치가 로드된 모델
     """
-    model_cls = getattr(import_module("model"), args.model)
+    model_cls = getattr(import_module("model"), args.models)
     model = model_cls(num_classes=num_classes)
 
     # tarpath = os.path.join(saved_model, 'best.tar.gz')
@@ -129,7 +129,7 @@ def voting(data_dir, model_dir, output_dir, args):
 
     # 예측 결과를 데이터프레임에 저장하고 csv 파일로 출력한다.
     info["ans"] = preds
-    save_path = os.path.join(output_dir, f"{current_time}.csv")
+    save_path = os.path.join(output_dir, f"soft_voting_{current_time}.csv")
     info.to_csv(save_path, index=False)
     print(f"Inference Done! Inference result saved at {save_path}")
 
@@ -167,11 +167,11 @@ if __name__ == '__main__':
     parser.add_argument(
         "--model_dir",
         type=str,
-        default=os.environ.get("SM_CHANNEL_MODEL", "./model/"),
+        default=os.environ.get("SM_CHANNEL_MODEL", "./checkpoint/"),
     )
     parser.add_argument(
         "--model_files", nargs='+', type=str,
-        default=["convnext.pth", "efficientnet.pth", "vit.pth"]
+        default=["convnext.pth", "efficient.pth", "vit.pth"]
     )
     parser.add_argument(
         "--data_dir",
