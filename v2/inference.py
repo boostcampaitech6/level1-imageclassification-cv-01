@@ -180,8 +180,8 @@ if __name__ == "__main__":
         "--resize",
         nargs=2,
         type=int,
-        default=(236,236),#(96, 128),
-        help="resize size for image when you trained (default: (236, 236))",
+        default=(96, 128),
+        help="resize size for image when you trained (default: (96,128))",
     )
     parser.add_argument(
         "--model", type=str, default="BaseModel", help="model type (default: BaseModel)"
@@ -201,7 +201,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model_dir",
         type=str,
-        default=os.environ.get("SM_CHANNEL_MODEL", "../../../models/exp103"),
+        default=os.environ.get("SM_CHANNEL_MODEL", "../../../models/exp"),
     )
     parser.add_argument(
         "--output_dir",

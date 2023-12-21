@@ -2,12 +2,51 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
-# from transformers import AutoImageProcessor, ConvNextForImageClassification
 import timm # needed library
 from timm.data import resolve_data_config
 from timm.data.transforms_factory import create_transform
 from typing import Callable, List, Optional, Sequence, Tuple, Union
+import torchvision.models as models
 
+
+class MyModel_efficient_v2_s(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+
+        efficient = models.efficientnet_v2_s(pretrained=True)
+        self.features = efficient.features
+
+        self.classifier = nn.Sequential(
+            nn.Dropout(p=0.2,inplace = True),
+            nn.Linear(in_features=1280, out_features=18, bias=True)
+
+        )
+
+    def forward(self, x):
+        x = self.features(x)
+        x = x.mean([2, 3])
+        x = self.classifier(x)
+        return x
+
+class MyModel_efficient_v2_l(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+
+        efficient = models.efficientnet_v2_l(pretrained=True)
+        self.features = efficient.features
+
+        self.classifier = nn.Sequential(
+            nn.Dropout(p=0.4,inplace = True),
+            nn.Linear(in_features=1280, out_features=18, bias=True)
+
+        )
+
+    def forward(self, x):
+        x = self.features(x)
+        x = x.mean([2, 3])
+        x = self.classifier(x)
+        return x
+    
 class BaseModel(nn.Module):
     """
     기본적인 컨볼루션 신경망 모델
@@ -114,6 +153,7 @@ class ConvNextModel(nn.Module):
         x=self.convnext(x)
         
         return x
+
     
 class ConvNextModel_3fc(nn.Module):
     def __init__(self, num_classes):
@@ -148,6 +188,33 @@ class ConvNextModel_3fc(nn.Module):
         
         return age,mask,gender
 
+class ConvNextModel(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+
+
+        # Initializing a model (with random weights) from the convnext-tiny-224 style configuration
+        self.convnext = torchvision.models.convnext_tiny(weights='IMAGENET1K_V1')
+        self.convnext.classifier = nn.Sequential(
+            nn.LayerNorm((768,1,1,), eps=1e-06, elementwise_affine=True),
+            nn.Flatten(start_dim=1, end_dim=-1),
+            # nn.Linear(in_features=768, out_features=1024, bias=True),
+            # nn.BatchNorm1d(1024),s
+            # nn.Dropout(p=0.2),
+            # nn.Linear(in_features=1024, out_features=num_classes, bias=True)
+            nn.Linear(in_features=768, out_features=num_classes, bias=True)
+        )
+
+
+    def forward(self, x):
+        """
+        1. 위에서 정의한 모델 아키텍쳐를 forward propagation 을 진행해주세요
+        2. 결과로 나온 output 을 return 해주세요
+        """
+        x=self.convnext(x)
+        
+        return x
+
 class ConvNext_timm(nn.Module):
     def __init__(self, num_classes, pretrained=True):
 
@@ -162,13 +229,3 @@ class ConvNext_timm(nn.Module):
         x = self.model(x)
         
         return x
-
-
-
-
-# convnext_model = torchvision.models.convnext_small(weights='IMAGENET1K_V1')
-
-
-# Print the model architecture
-#print(convnext_model.convnext)
-# 

@@ -122,14 +122,19 @@ def train(data_dir, model_dir, args):
 
     # -- data_loader
     train_set, val_set = dataset.split_dataset()
+    weights=dataset.weights
+    sample_weights=[weights[train_set[i][1]] for i in range(len(train_set))]
+    print(len(sample_weights))
+    sampler = torch.utils.data.sampler.WeightedRandomSampler(sample_weights, 9000,replacement=True)
 
     train_loader = DataLoader(
         train_set,
         batch_size=args.batch_size,
         num_workers=multiprocessing.cpu_count() // 2,
-        shuffle=True,
+        # shuffle=True,
         pin_memory=use_cuda,
         drop_last=True,
+        sampler=sampler,
     )
 
     val_loader = DataLoader(
@@ -147,9 +152,10 @@ def train(data_dir, model_dir, args):
     model = torch.nn.DataParallel(model)
         
     # -- loss & metric
-    criterion_age = create_criterion(args.criterion_age,classes=3)  # default: f1
-    criterion_mask = create_criterion(args.criterion_mask,classes=3)
-    criterion_gender = create_criterion(args.criterion_gender,classes=2)
+
+    criterion_age = create_criterion(args.criterion_age)  # default: cross_entropy
+    criterion_mask = create_criterion(args.criterion_mask) # f1을 쓸 경우 class argument 추가
+    criterion_gender = create_criterion(args.criterion_gender)
     
     opt_module = getattr(import_module("torch.optim"), args.optimizer)  # default: SGD
     optimizer = opt_module(
@@ -386,7 +392,7 @@ if __name__ == "__main__":
         "--resize",
         nargs=2,
         type=int,
-        default=[236,236],#[128, 96],
+        default=[128, 96],
         help="resize size for image when training",
     )
     parser.add_argument(
@@ -419,20 +425,20 @@ if __name__ == "__main__":
     parser.add_argument(
         "--criterion_age",
         type=str,
-        default="f1",
-        help="criterion type for age(default: f1)",
+        default="cross_entropy",
+        help="criterion type for age(default: cross_entropy)",
     )
     parser.add_argument(
         "--criterion_mask",
         type=str,
-        default="f1",
-        help="criterion type for mask(default: f1)",
+        default="cross_entropy",
+        help="criterion type for mask(default: cross_entropy)",
     )
     parser.add_argument(
         "--criterion_gender",
         type=str,
-        default="f1",
-        help="criterion type for gender(default: f1)",
+        default="cross_entropy",
+        help="criterion type for gender(default: cross_entropy)",
     )
     parser.add_argument(
         "--lr_decay_step",

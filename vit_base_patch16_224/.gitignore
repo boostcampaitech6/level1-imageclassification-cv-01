@@ -5,9 +5,7 @@ __pycache__/
 Auto_setup_Yeah_FIXED.sh 
 .vscode
 data
-vit16_b32_e10_BaseData
-vit16_b32_e40_splitbyprofile
-vit16_b64_e40_splitbyprofile
+
 
 # C extensions
 *.so

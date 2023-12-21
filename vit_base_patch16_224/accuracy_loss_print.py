@@ -3,6 +3,8 @@
 # cls 별로 loss와 acc 출력하기
 # 함수 input으로 받아올거 (labels, loss 값, preds, outs, criterion, args.batchsize, args.log_interval)
 
+
+
 class AccuracyLoss():
     #loss = criterion(outs, labels)
     #loss_value += loss.item()
@@ -156,69 +158,3 @@ class AccuracyLoss():
         }
 
         return loss_dict, acc_dict
-    
-
-class AgeBoundaryAcc():
-    def __init__(self, labels, preds, ages):
-        age_late_20s = 0
-        age_late_50s = 0
-        age_60s = 0
-
-        e_age_late_20s = 0
-        e_age_late_50s = 0
-        e_age_60s = 0
-
-        self.age_late_20s_cnt = 0
-        self.age_late_50s_cnt = 0
-        self.age_60s_cnt = 0
-
-
-        for label, pred, age in zip(labels, preds, ages):
-            pred_d = pred%3
-            label_d = label%3
-            if age in [27,28,29]:
-                age_late_20s+= (pred_d == label_d)
-                e_age_late_20s +=(pred_d == 1)
-                self.age_late_20s_cnt +=1
-            elif age in [57,58,59]:
-                age_late_50s += (pred_d ==label_d)
-                e_age_late_50s +=(pred_d == 2)
-                self.age_late_50s_cnt +=1
-            elif label%3 == 2:
-                age_60s += (pred_d == label_d)
-                e_age_60s += (pred_d ==1)
-                self.age_60s_cnt +=1
-
-        
-
-        self.match_dict = {
-            'age_late_20s' : age_late_20s,
-            'age_late_50s' : age_late_50s,
-            'age_60s' : age_60s,
-            'e_age_late_20s' : e_age_late_20s,
-            'e_age_late_50s' : e_age_late_50s,
-            'e_age_60s' : e_age_60s,
-        }
-
-
-
-    def cal_acc(self, len_set):
-        late_20s_acc = self.match_dict['age_late_20s'] / self.age_late_20s_cnt if self.age_late_20s_cnt !=0 else 0
-        late_50s_acc = self.match_dict['age_late_50s'] / self.age_late_50s_cnt if self.age_late_50s_cnt !=0 else 0
-        age_60s_acc = self.match_dict['age_60s'] / self.age_60s_cnt if self.age_60s_cnt!=0 else 0
-
-        late_20s_MIDDLE = self.match_dict['e_age_late_20s'] / self.age_late_20s_cnt if self.age_late_20s_cnt !=0 else 0
-        late_50s_OLD = self.match_dict['e_age_late_50s'] / self.age_late_50s_cnt if self.age_late_50s_cnt !=0 else 0
-        age_60s_MIDDLE = self.match_dict['e_age_60s'] / self.age_60s_cnt if self.age_60s_cnt!=0 else 0
-
-
-
-        acc_dict = {
-            'late_20s_acc' : late_20s_acc / len_set,
-            'late_20s_MIDDLE' : late_20s_MIDDLE / len_set,
-            'late_50s_acc' : late_50s_acc / len_set,
-            'late_50s_OLD' : late_50s_OLD /len_set,
-            'age_60s_acc' : age_60s_acc / len_set,
-            'age_60s_MIDDLE' : age_60s_MIDDLE / len_set,
-        }
-        return acc_dict

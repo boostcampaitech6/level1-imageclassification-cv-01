@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
-# from transformers import AutoImageProcessor, ConvNextForImageClassification
 import timm # needed library
 from timm.data import resolve_data_config
 from timm.data.transforms_factory import create_transform
