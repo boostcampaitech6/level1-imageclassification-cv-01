@@ -149,7 +149,7 @@ def train(data_dir, model_dir, args):
     weights=dataset.weights
     sample_weights=[weights[train_set[i][1]] for i in range(len(train_set))]
     print(len(sample_weights))
-    sampler = torch.utils.data.sampler.WeightedRandomSampler(sample_weights, 9000,replacement=True)
+    sampler = torch.utils.data.sampler.WeightedRandomSampler(sample_weights, len(sample_weights),replacement=True)
 
     train_loader = DataLoader(
         train_set,
