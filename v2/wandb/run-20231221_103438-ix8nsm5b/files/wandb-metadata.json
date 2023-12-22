@@ -1,0 +1,106 @@
+{
+    "os": "Linux-5.4.0-99-generic-x86_64-with-glibc2.31",
+    "python": "3.10.13",
+    "heartbeatAt": "2023-12-21T05:34:44.146260",
+    "startedAt": "2023-12-21T05:34:38.414635",
+    "docker": null,
+    "cuda": null,
+    "args": [
+        "--epochs",
+        "10",
+        "--batch_size",
+        "64",
+        "--model",
+        "ConvNextModel",
+        "--optimizer",
+        "Adam",
+        "--lr",
+        "0.0001",
+        "--criterion",
+        "cross_entropy",
+        "--use_stratified_kfold",
+        "--num_splits",
+        "5",
+        "--current_fold",
+        "0"
+    ],
+    "state": "running",
+    "program": "/data/ephemeral/home/code2/level1-imageclassification-cv-01/v2/train.py",
+    "codePathLocal": "train.py",
+    "codePath": "v2/train.py",
+    "git": {
+        "remote": "https://jh7316:@github.com/boostcampaitech6/level1-imageclassification-cv-01.git",
+        "commit": "3f9c9ef46291207f19bd27ddce0741b9ede47839"
+    },
+    "email": "jh7316@nyu.edu\\n",
+    "root": "/data/ephemeral/home/code2/level1-imageclassification-cv-01",
+    "host": "instance-4460",
+    "username": "root",
+    "executable": "/opt/conda/bin/python",
+    "cpu_count": 8,
+    "cpu_count_logical": 8,
+    "cpu_freq": {
+        "current": 2199.902,
+        "min": 0.0,
+        "max": 0.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 2199.902,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2199.902,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2199.902,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2199.902,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2199.902,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2199.902,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2199.902,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2199.902,
+            "min": 0.0,
+            "max": 0.0
+        }
+    ],
+    "disk": {
+        "/": {
+            "total": 48.963348388671875,
+            "used": 33.805965423583984
+        }
+    },
+    "gpu": "Tesla V100-SXM2-32GB",
+    "gpu_count": 1,
+    "gpu_devices": [
+        {
+            "name": "Tesla V100-SXM2-32GB",
+            "memory_total": 34089730048
+        }
+    ],
+    "memory": {
+        "total": 88.38546752929688
+    }
+}

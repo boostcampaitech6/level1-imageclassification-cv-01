@@ -1,0 +1,126 @@
+wandb_version: 1
+
+_wandb:
+  desc: null
+  value:
+    python_version: 3.10.13
+    cli_version: 0.16.1
+    framework: huggingface
+    huggingface_version: 4.36.1
+    is_jupyter_run: false
+    is_kaggle_kernel: false
+    start_time: 1703132253.341503
+    t:
+      1:
+      - 1
+      - 5
+      - 11
+      - 41
+      - 49
+      - 53
+      - 55
+      - 63
+      2:
+      - 1
+      - 5
+      - 11
+      - 41
+      - 49
+      - 53
+      - 55
+      - 63
+      3:
+      - 13
+      - 23
+      4: 3.10.13
+      5: 0.16.1
+      6: 4.36.1
+      8:
+      - 5
+      13: linux-x86_64
+resume_from:
+  desc: null
+  value: null
+seed:
+  desc: null
+  value: 42
+epochs:
+  desc: null
+  value: 10
+dataset:
+  desc: null
+  value: MaskSplitByProfileDataset
+augmentation:
+  desc: null
+  value: BaseAugmentation
+resize:
+  desc: null
+  value:
+  - 236
+  - 236
+batch_size:
+  desc: null
+  value: 64
+valid_batch_size:
+  desc: null
+  value: 1000
+model:
+  desc: null
+  value: ConvNextModel
+optimizer:
+  desc: null
+  value: AdamW
+lr:
+  desc: null
+  value: 0.0001
+val_ratio:
+  desc: null
+  value: 0.2
+criterion:
+  desc: null
+  value: focal
+lr_decay_step:
+  desc: null
+  value: 20
+log_interval:
+  desc: null
+  value: 20
+name:
+  desc: null
+  value: exp
+data_dir:
+  desc: null
+  value: ../../../train/images
+model_dir:
+  desc: null
+  value: /data/ephemeral/home/models
+use_stratified_kfold:
+  desc: null
+  value: false
+num_splits:
+  desc: null
+  value: 5
+current_fold:
+  desc: null
+  value: 0
+mixup:
+  desc: null
+  value: 0
+cutmix:
+  desc: null
+  value: 0
+cutmix_minmax:
+  desc: null
+  value: null
+mixup_prob:
+  desc: null
+  value: 1.0
+mixup_switch_prob:
+  desc: null
+  value: 0.5
+mixup_mode:
+  desc: null
+  value: batch
+label_smoothing:
+  desc: null
+  value: 0.0
