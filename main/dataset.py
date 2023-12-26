@@ -512,8 +512,7 @@ class TestDataset(Dataset):
 
 class CustomAugmentation_for_Oversampling:
     """
-    Oversampling에 적용할 커스텀 Augmentation을 담당하는 클래스
-    23.12.21 수정 -> train.py의 sampler 관련 부분을 주석처리해야 사용가능 
+    Oversampling된 데이터에 적용할 커스텀 Augmentation을 담당하는 클래스
     """
 
     def __init__(self, resize, mean, std, **args):
@@ -533,6 +532,10 @@ class CustomAugmentation_for_Oversampling:
 
 
 class OversamplingMaskDataset(MaskSplitByProfileDataset):
+    """
+    60대 이상의 데이터 Oversampling 및 Augmentation 적용을 담당하는 클래스
+    """
+    
     def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2, oversample_ratio=0.3):
         super().__init__(data_dir, mean, std, val_ratio)
 
