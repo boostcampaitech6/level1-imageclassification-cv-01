@@ -123,7 +123,7 @@ python soft_voting.py --models MODEL_NAME1 MODEL_NAME2 MODEL_NAME3 --model_dir .
 
 ## Model
 - [ConvNext Tiny](./docs/ConvNext.md)
-- [EfficientNet v2 small](./docs/EfficientNet_v2_small.md)
+- [EfficientNet v2 small](./docs/EfficientNet.md)
 - [ViT16](./docs/ViT16.md)
 
 ## Dataloader
